@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pong Game</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
         .auth-form {
             max-width: 400px;
@@ -16,14 +17,103 @@
         .hidden {
             display: none !important;
         }
+        .game-container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        .game-canvas-container {
+            margin: 20px auto;
+            text-align: center;
+        }
+        #game-canvas {
+            border: 2px solid #333;
+            background: #000;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+        }
+        .player-list-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+        }
+        .player-list-item:hover {
+            background-color: #f8f9fa;
+        }
+        .chat-container {
+            height: 400px;
+            display: flex;
+            flex-direction: column;
+        }
+        .chat-messages {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .message {
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            border-radius: 4px;
+        }
+        .message-own {
+            background-color: #d1ecf1;
+            align-self: flex-end;
+        }
+        .message-other {
+            background-color: #e2e3e5;
+        }
+        .tournament-bracket {
+            display: flex;
+            flex-direction: column;
+            margin: 20px 0;
+        }
+        .tournament-round {
+            display: flex;
+            flex-direction: column;
+            margin-right: 20px;
+        }
+        .tournament-match {
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 5px;
+            border-radius: 4px;
+            background-color: #f8f9fa;
+        }
+        .online-status {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        .status-online {
+            background-color: #28a745;
+        }
+        .status-offline {
+            background-color: #dc3545;
+        }
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+        .friend-request {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
     </style>
 </head>
 <body>
     <div class="container py-5">
-        <header class="text-center mb-5">
+        <header class="text-center mb-4">
             <h1>Pong Game</h1>
         </header>
 
+        <!-- Navigation -->
         <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
             <div class="container-fluid">
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -32,33 +122,361 @@
                 <div class="collapse navbar-collapse" id="navbarNav">
                     <ul class="navbar-nav me-auto">
                         <li class="nav-item">
-                            <a class="nav-link" href="#" id="home-link">Trang chủ</a>
+                            <a class="nav-link" href="#" id="home-link" data-page="home">Trang chủ</a>
+                        </li>
+                        <li class="nav-item d-none" id="games-nav">
+                            <a class="nav-link" href="#" id="games-link" data-page="games">Trò chơi</a>
+                        </li>
+                        <li class="nav-item d-none" id="tournament-nav">
+                            <a class="nav-link" href="#" id="tournament-link" data-page="tournament">Giải đấu</a>
+                        </li>
+                        <li class="nav-item d-none" id="friends-nav">
+                            <a class="nav-link" href="#" id="friends-link" data-page="friends">Bạn bè</a>
+                        </li>
+                        <li class="nav-item d-none" id="profile-nav">
+                            <a class="nav-link" href="#" id="profile-link" data-page="profile">Hồ sơ</a>
+                        </li>
+                        <li class="nav-item d-none" id="chat-nav">
+                            <a class="nav-link" href="#" id="chat-link" data-page="chat">Trò chuyện</a>
                         </li>
                     </ul>
                     <div class="d-flex" id="auth-buttons">
                         <button class="btn btn-outline-primary me-2" id="login-button">Đăng nhập</button>
                         <button class="btn btn-primary" id="register-button">Đăng ký</button>
                     </div>
-                    <div class="d-flex hidden" id="user-profile">
-                        <span class="navbar-text me-3" id="user-welcome">Xin chào, </span>
-                        <button class="btn btn-outline-danger" id="logout-button">Đăng xuất</button>
+                    <div class="d-flex hidden" id="user-profile-nav">
+                        <div class="dropdown">
+                            <button class="btn btn-outline-primary dropdown-toggle" type="button" id="user-dropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                <span id="user-welcome">Xin chào</span>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="user-dropdown">
+                                <li><a class="dropdown-item" href="#" id="profile-dropdown" data-page="profile">Hồ sơ</a></li>
+                                <li><a class="dropdown-item" href="#" id="logout-button">Đăng xuất</a></li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
             </div>
         </nav>
 
-        <main>
+        <!-- Main Content - Các phần nội dung sẽ được render bởi jQuery -->
+        <main id="main-content">
+            <!-- Home Page -->
             <div id="home-content" class="text-center">
                 <h2>Chào mừng đến với trò chơi Pong!</h2>
                 <p class="lead">Đăng nhập hoặc đăng ký để bắt đầu chơi game.</p>
                 <div id="auth-needed-message">
                     <p>Bạn cần đăng nhập để chơi game.</p>
                 </div>
-                <div id="game-area" class="hidden">
-                    <p>Khu vực game sẽ hiển thị ở đây.</p>
+                <div id="home-authenticated" class="hidden">
+                    <div class="row mt-4">
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5 class="card-title">Chơi Pong</h5>
+                                    <p class="card-text">Chơi trò chơi Pong cổ điển với bạn bè hoặc AI.</p>
+                                    <button class="btn btn-primary" id="play-pong-btn">Bắt đầu chơi</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5 class="card-title">Tham gia giải đấu</h5>
+                                    <p class="card-text">Tham gia hoặc tạo một giải đấu Pong để thi đấu.</p>
+                                    <button class="btn btn-primary" id="tournament-btn">Giải đấu</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5 class="card-title">Trò chuyện</h5>
+                                    <p class="card-text">Trò chuyện với bạn bè và mời họ chơi game.</p>
+                                    <button class="btn btn-primary" id="goto-chat-btn">Trò chuyện</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
+            <!-- Games Page -->
+            <div id="games-content" class="hidden">
+                <h2 class="mb-4">Chơi game</h2>
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title">Tạo game mới</h5>
+                                <p class="card-text">Tạo một game Pong mới và mời bạn bè tham gia.</p>
+                                <div class="d-grid">
+                                    <button class="btn btn-primary" id="create-game-btn">Tạo game</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title">Tham gia game</h5>
+                                <p class="card-text">Tham gia vào một game Pong đang chờ người chơi.</p>
+                                <div class="d-grid">
+                                    <button class="btn btn-primary" id="join-game-btn">Tìm game</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title">Chơi với AI</h5>
+                                <p class="card-text">Chơi Pong với AI ở các cấp độ khác nhau.</p>
+                                <div class="d-grid">
+                                    <button class="btn btn-primary" id="play-ai-btn">Chơi với AI</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Game Container -->
+            <div id="game-container" class="game-container hidden">
+                <div id="game-info" class="mb-3">
+                    <!-- Thông tin game sẽ được render bằng JavaScript -->
+                </div>
+                <div id="game-canvas-container" class="game-canvas-container">
+                    <!-- Canvas sẽ được tạo bằng JavaScript -->
+                </div>
+            </div>
+
+            <!-- Waiting Screen -->
+            <div id="waiting-screen" class="text-center hidden">
+                <h3>Đang chờ người chơi khác tham gia...</h3>
+                <div class="spinner-border text-primary my-3" role="status">
+                    <span class="visually-hidden">Đang chờ...</span>
+                </div>
+                <div class="card mt-3">
+                    <div class="card-body">
+                        <h5 class="card-title">Thông tin game</h5>
+                        <p class="card-text">ID: <span id="game-id"></span></p>
+                        <p class="card-text">Điểm tối đa: <span id="game-max-score"></span></p>
+                        <p class="card-text">Power-ups: <span id="game-powerups"></span></p>
+                        <p class="card-text">Chia sẻ liên kết này để mời bạn bè:</p>
+                        <div class="input-group mb-3">
+                            <input type="text" class="form-control" id="game-url" readonly>
+                            <button class="btn btn-outline-secondary" type="button" id="copy-url-btn">Sao chép URL</button>
+                        </div>
+                        <button class="btn btn-secondary" id="cancel-waiting-btn">Hủy</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tournament Page -->
+            <div id="tournament-content" class="hidden">
+                <h2 class="mb-4">Giải đấu Pong</h2>
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title">Tạo giải đấu mới</h5>
+                                <p class="card-text">Tạo một giải đấu Pong mới và mời bạn bè tham gia.</p>
+                                <div class="d-grid">
+                                    <button class="btn btn-primary" id="create-tournament-btn">Tạo giải đấu</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title">Tham gia giải đấu</h5>
+                                <p class="card-text">Tham gia vào một giải đấu Pong đang mở.</p>
+                                <div class="d-grid">
+                                    <button class="btn btn-primary" id="join-tournament-btn">Tìm giải đấu</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <h3>Giải đấu đang diễn ra</h3>
+                <div id="active-tournaments">
+                    <!-- Danh sách giải đấu đang diễn ra được render bằng JavaScript -->
+                    <div class="text-center py-3">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Đang tải...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tournament Detail -->
+            <div id="tournament-detail" class="hidden">
+                <!-- Thông tin chi tiết về giải đấu sẽ được render bằng JavaScript -->
+            </div>
+
+            <!-- Profile Page -->
+            <div id="profile-content" class="hidden">
+                <h2 class="mb-4">Hồ sơ cá nhân</h2>
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-body text-center">
+                                <div class="mb-3">
+                                    <img id="user-avatar" src="/media/avatars/default.png" alt="Avatar" class="rounded-circle" style="width: 150px; height: 150px; object-fit: cover;">
+                                </div>
+                                <h4 id="profile-display-name">Tên hiển thị</h4>
+                                <p id="profile-username">@username</p>
+                                <button class="btn btn-outline-primary" id="edit-profile-btn">Chỉnh sửa hồ sơ</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-8">
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h5 class="card-title">Thống kê</h5>
+                                <div class="row">
+                                    <div class="col-md-4 text-center">
+                                        <h3 id="profile-wins">0</h3>
+                                        <p>Thắng</p>
+                                    </div>
+                                    <div class="col-md-4 text-center">
+                                        <h3 id="profile-losses">0</h3>
+                                        <p>Thua</p>
+                                    </div>
+                                    <div class="col-md-4 text-center">
+                                        <h3 id="profile-win-rate">0%</h3>
+                                        <p>Tỉ lệ thắng</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title">Lịch sử trận đấu</h5>
+                                <div id="match-history">
+                                    <!-- Lịch sử trận đấu sẽ được render bằng JavaScript -->
+                                    <div class="text-center py-3">
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="visually-hidden">Đang tải...</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Friends Page -->
+            <div id="friends-content" class="hidden">
+                <h2 class="mb-4">Bạn bè</h2>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">Danh sách bạn bè</h5>
+                                <button class="btn btn-sm btn-outline-primary" id="refresh-friends-btn">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                            </div>
+                            <div class="card-body">
+                                <div id="friends-list">
+                                    <!-- Danh sách bạn bè sẽ được render bằng JavaScript -->
+                                    <div class="text-center py-3">
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="visually-hidden">Đang tải...</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card mb-3">
+                            <div class="card-header">
+                                <h5 class="mb-0">Thêm bạn bè</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="input-group mb-3">
+                                    <input type="text" class="form-control" id="search-username" placeholder="Tìm kiếm theo tên người dùng">
+                                    <button class="btn btn-outline-primary" id="search-user-btn">Tìm kiếm</button>
+                                </div>
+                                <div id="search-results">
+                                    <!-- Kết quả tìm kiếm sẽ được render bằng JavaScript -->
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="mb-0">Lời mời kết bạn</h5>
+                            </div>
+                            <div class="card-body">
+                                <div id="friend-requests">
+                                    <!-- Lời mời kết bạn sẽ được render bằng JavaScript -->
+                                    <div class="text-center py-3">
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="visually-hidden">Đang tải...</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Page -->
+            <div id="chat-content" class="hidden">
+                <h2 class="mb-4">Trò chuyện</h2>
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="mb-0">Danh sách bạn bè</h5>
+                            </div>
+                            <div class="card-body p-0">
+                                <div id="chat-friends-list">
+                                    <!-- Danh sách bạn bè cho chat sẽ được render bằng JavaScript -->
+                                    <div class="text-center py-3">
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="visually-hidden">Đang tải...</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-8">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="mb-0" id="chat-recipient-name">Chọn một người để bắt đầu trò chuyện</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="chat-container">
+                                    <div class="chat-messages" id="chat-messages">
+                                        <!-- Tin nhắn sẽ được render bằng JavaScript -->
+                                        <p class="text-center text-muted">Chọn một người để bắt đầu trò chuyện</p>
+                                    </div>
+                                    <div class="chat-input">
+                                        <div class="input-group">
+                                            <input type="text" class="form-control" id="chat-message-input" placeholder="Nhập tin nhắn..." disabled>
+                                            <button class="btn btn-primary" id="send-message-btn" disabled>Gửi</button>
+                                        </div>
+                                        <div class="d-flex justify-content-between mt-2 d-none" id="chat-actions">
+                                            <button class="btn btn-sm btn-outline-primary" id="invite-game-btn">Mời chơi game</button>
+                                            <button class="btn btn-sm btn-outline-danger" id="block-user-btn">Chặn người dùng</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Auth Forms -->
             <div id="login-form" class="auth-form hidden">
                 <h2 class="text-center mb-4">Đăng nhập</h2>
                 <form id="login-form-element">
@@ -115,78 +533,275 @@
         </main>
     </div>
 
+    <!-- Modals -->
+    <div class="modal fade" id="create-game-modal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Tạo game mới</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="create-game-form">
+                        <div class="mb-3">
+                            <label for="max-score" class="form-label">Điểm tối đa</label>
+                            <select class="form-select" id="max-score">
+                                <option value="5">5</option>
+                                <option value="7">7</option>
+                                <option value="10">10</option>
+                                <option value="15">15</option>
+                            </select>
+                        </div>
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="enable-powerups">
+                            <label class="form-check-label" for="enable-powerups">Kích hoạt Power-ups</label>
+                        </div>
+                        <div class="mb-3">
+                            <label for="ball-speed" class="form-label">Tốc độ bóng</label>
+                            <select class="form-select" id="ball-speed">
+                                <option value="0.8">Chậm</option>
+                                <option value="1.0" selected>Trung bình</option>
+                                <option value="1.2">Nhanh</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="paddle-size" class="form-label">Kích thước paddle</label>
+                            <select class="form-select" id="paddle-size">
+                                <option value="small">Nhỏ</option>
+                                <option value="medium" selected>Trung bình</option>
+                                <option value="large">Lớn</option>
+                            </select>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+                    <button type="button" class="btn btn-primary" id="create-game-submit">Tạo game</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="join-game-modal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Tham gia game</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="d-flex justify-content-between mb-3">
+                        <h6>Danh sách game đang chờ</h6>
+                        <button class="btn btn-sm btn-outline-primary" id="refresh-games-btn">
+                            <i class="fas fa-sync-alt"></i> Làm mới
+                        </button>
+                    </div>
+                    <div id="available-games-list">
+                        <div class="text-center py-3">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Đang tải...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="ai-game-modal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Chơi với AI</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="ai-game-form">
+                        <div class="mb-3">
+                            <label for="ai-difficulty" class="form-label">Độ khó</label>
+                            <select class="form-select" id="ai-difficulty">
+                                <option value="easy">Dễ</option>
+                                <option value="medium" selected>Trung bình</option>
+                                <option value="hard">Khó</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="ai-max-score" class="form-label">Điểm tối đa</label>
+                            <select class="form-select" id="ai-max-score">
+                                <option value="5">5</option>
+                                <option value="7">7</option>
+                                <option value="10">10</option>
+                                <option value="15">15</option>
+                            </select>
+                        </div>
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="ai-enable-powerups">
+                            <label class="form-check-label" for="ai-enable-powerups">Kích hoạt Power-ups</label>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+                    <button type="button" class="btn btn-primary" id="ai-game-submit">Bắt đầu</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="create-tournament-modal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Tạo giải đấu mới</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="create-tournament-form">
+                        <div class="mb-3">
+                            <label for="tournament-name" class="form-label">Tên giải đấu</label>
+                            <input type="text" class="form-control" id="tournament-name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="tournament-description" class="form-label">Mô tả</label>
+                            <textarea class="form-control" id="tournament-description" rows="3"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="tournament-max-players" class="form-label">Số người chơi tối đa</label>
+                            <select class="form-select" id="tournament-max-players">
+                                <option value="4">4</option>
+                                <option value="8" selected>8</option>
+                                <option value="16">16</option>
+                                <option value="32">32</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="tournament-max-score" class="form-label">Điểm tối đa mỗi trận</label>
+                            <select class="form-select" id="tournament-max-score">
+                                <option value="5">5</option>
+                                <option value="7">7</option>
+                                <option value="10" selected>10</option>
+                            </select>
+                        </div>
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="tournament-enable-powerups">
+                            <label class="form-check-label" for="tournament-enable-powerups">Kích hoạt Power-ups</label>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+                    <button type="button" class="btn btn-primary" id="create-tournament-submit">Tạo giải đấu</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="edit-profile-modal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Chỉnh sửa hồ sơ</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="edit-profile-form">
+                        <div class="mb-3 text-center">
+                            <img id="avatar-preview" src="/media/avatars/default.png" alt="Avatar Preview" class="rounded-circle mb-2" style="width: 150px; height: 150px; object-fit: cover;">
+                            <div>
+                                <label for="avatar-upload" class="btn btn-sm btn-outline-primary">Chọn ảnh</label>
+                                <input type="file" id="avatar-upload" class="d-none" accept="image/*">
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit-display-name" class="form-label">Tên hiển thị</label>
+                            <input type="text" class="form-control" id="edit-display-name" required>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+                    <button type="button" class="btn btn-primary" id="save-profile-btn">Lưu thay đổi</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="invite-game-modal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Mời chơi game</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="invite-game-form">
+                        <div class="mb-3">
+                            <label for="invite-max-score" class="form-label">Điểm tối đa</label>
+                            <select class="form-select" id="invite-max-score">
+                                <option value="5">5</option>
+                                <option value="7">7</option>
+                                <option value="10">10</option>
+                            </select>
+                        </div>
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="invite-enable-powerups">
+                            <label class="form-check-label" for="invite-enable-powerups">Kích hoạt Power-ups</label>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+                    <button type="button" class="btn btn-primary" id="send-invite-btn">Gửi lời mời</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Libraries -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/js/all.min.js"></script>
+
+    <!-- Game Engine Scripts -->
+    <script src="/static/js/pong-game.js"></script>
+    <script src="/static/js/pong-ai.js"></script>
+    <script src="/static/js/game-interface.js"></script>
+    <script src="/static/js/spa-router.js"></script>
+    <script src="/static/js/chat-manager.js"></script>
+    <script src="/static/js/user-manager.js"></script>
+    <script src="/static/js/tournament-manager.js"></script>
+
     <script>
-        const homeContent = document.getElementById('home-content');
-        const loginForm = document.getElementById('login-form');
-        const registerForm = document.getElementById('register-form');
-        const loginFormElement = document.getElementById('login-form-element');
-        const registerFormElement = document.getElementById('register-form-element');
-        const loginButton = document.getElementById('login-button');
-        const registerButton = document.getElementById('register-button');
-        const logoutButton = document.getElementById('logout-button');
-        const homeLink = document.getElementById('home-link');
-        const toRegisterLink = document.getElementById('to-register-link');
-        const toLoginLink = document.getElementById('to-login-link');
-        const authButtons = document.getElementById('auth-buttons');
-        const userProfile = document.getElementById('user-profile');
-        const userWelcome = document.getElementById('user-welcome');
-        const loginError = document.getElementById('login-error');
-        const registerError = document.getElementById('register-error');
-        const authNeededMessage = document.getElementById('auth-needed-message');
-        const gameArea = document.getElementById('game-area');
+        let userId = null;
+        let currentUser = null;
 
-        const API_BASE = '/api/users';
-        const LOGIN_URL = `${API_BASE}/login/`;
-        const LOGOUT_URL = `${API_BASE}/logout/`;
-        const REGISTER_URL = `${API_BASE}/register/`;
-        const USER_URL = `${API_BASE}/me/`;
+        // Kiểm tra đăng nhập khi tải trang
+        $(document).ready(function() {
+            checkLoggedIn();
+            initSpaRouter();
+        });
 
-        function showElement(element) {
-            element.classList.remove('hidden');
-        }
-
-        function hideElement(element) {
-            element.classList.add('hidden');
-        }
-
-        function showHome() {
-            showElement(homeContent);
-            hideElement(loginForm);
-            hideElement(registerForm);
-        }
-
-        function showLogin() {
-            hideElement(homeContent);
-            showElement(loginForm);
-            hideElement(registerForm);
-        }
-
-        function showRegister() {
-            hideElement(homeContent);
-            hideElement(loginForm);
-            showElement(registerForm);
-        }
-
-        function updateUIForLoggedIn(user) {
-            hideElement(authButtons);
-            showElement(userProfile);
-            userWelcome.textContent = `Xin chào, ${user.display_name || user.username}`;
-            hideElement(authNeededMessage);
-            showElement(gameArea);
-        }
-
-        function updateUIForLoggedOut() {
-            showElement(authButtons);
-            hideElement(userProfile);
-            showHome();
-            showElement(authNeededMessage);
-            hideElement(gameArea);
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
         }
 
         async function checkLoggedIn() {
             try {
-                const response = await fetch(USER_URL, {
+                const response = await fetch('/api/users/me/', {
                     method: 'GET',
                     headers: {
                         'Content-Type': 'application/json',
@@ -210,52 +825,91 @@
             }
         }
 
-        function getCookie(name) {
-            let cookieValue = null;
-            if (document.cookie && document.cookie !== '') {
-                const cookies = document.cookie.split(';');
-                for (let i = 0; i < cookies.length; i++) {
-                    const cookie = cookies[i].trim();
-                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                        break;
-                    }
-                }
-            }
-            return cookieValue;
+        function updateUIForLoggedIn(user) {
+            userId = user.id;
+            currentUser = user;
+
+            // Cập nhật UI
+            hideElement(document.getElementById('auth-buttons'));
+            showElement(document.getElementById('user-profile-nav'));
+            document.getElementById('user-welcome').textContent = `Xin chào, ${user.display_name || user.username}`;
+
+            // Hiển thị menu điều hướng
+            document.querySelectorAll('#games-nav, #tournament-nav, #friends-nav, #profile-nav, #chat-nav').forEach(el => {
+                el.classList.remove('d-none');
+            });
+
+            // Ẩn thông báo đăng nhập
+            hideElement(document.getElementById('auth-needed-message'));
+            showElement(document.getElementById('home-authenticated'));
+
+            // Khởi tạo các manager
+            initUserManager(user);
+            initChatManager(user);
+            initGameInterface();
+            initTournamentManager();
         }
 
-        homeLink.addEventListener('click', (e) => {
-            e.preventDefault();
-            showHome();
-        });
+        function updateUIForLoggedOut() {
+            userId = null;
+            currentUser = null;
 
-        loginButton.addEventListener('click', () => {
-            showLogin();
-        });
+            // Cập nhật UI
+            showElement(document.getElementById('auth-buttons'));
+            hideElement(document.getElementById('user-profile-nav'));
 
-        registerButton.addEventListener('click', () => {
-            showRegister();
-        });
+            // Ẩn menu điều hướng
+            document.querySelectorAll('#games-nav, #tournament-nav, #friends-nav, #profile-nav, #chat-nav').forEach(el => {
+                el.classList.add('d-none');
+            });
 
-        toRegisterLink.addEventListener('click', (e) => {
-            e.preventDefault();
-            showRegister();
-        });
+            // Hiển thị thông báo đăng nhập
+            showElement(document.getElementById('auth-needed-message'));
+            hideElement(document.getElementById('home-authenticated'));
 
-        toLoginLink.addEventListener('click', (e) => {
-            e.preventDefault();
-            showLogin();
-        });
+            // Hiển thị trang chủ
+            showPage('home');
+        }
 
-        loginFormElement.addEventListener('submit', async (e) => {
+        function showElement(element) {
+            if (element) element.classList.remove('hidden');
+        }
+
+        function hideElement(element) {
+            if (element) element.classList.add('hidden');
+        }
+
+        function showPage(pageId) {
+            // Ẩn tất cả các trang
+            document.querySelectorAll('#main-content > div').forEach(el => {
+                hideElement(el);
+            });
+
+            // Hiển thị trang được chọn
+            const pageElement = document.getElementById(`${pageId}-content`);
+            if (pageElement) {
+                showElement(pageElement);
+            } else if (pageId === 'game-container') {
+                showElement(document.getElementById('game-container'));
+            } else if (pageId === 'waiting-screen') {
+                showElement(document.getElementById('waiting-screen'));
+            } else if (pageId === 'tournament-detail') {
+                showElement(document.getElementById('tournament-detail'));
+            } else {
+                // Mặc định hiển thị trang chủ
+                showElement(document.getElementById('home-content'));
+            }
+        }
+
+        // Xử lý đăng nhập
+        document.getElementById('login-form-element').addEventListener('submit', async (e) => {
             e.preventDefault();
 
             const username = document.getElementById('login-username').value;
             const password = document.getElementById('login-password').value;
 
             try {
-                const response = await fetch(LOGIN_URL, {
+                const response = await fetch('/api/users/login/', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -267,22 +921,23 @@
 
                 if (response.ok) {
                     const user = await response.json();
-                    loginFormElement.reset();
+                    document.getElementById('login-form-element').reset();
                     updateUIForLoggedIn(user);
-                    showHome();
+                    showPage('home');
                 } else {
                     const errorData = await response.json();
-                    loginError.textContent = errorData.error || 'Đăng nhập thất bại';
-                    showElement(loginError);
+                    document.getElementById('login-error').textContent = errorData.error || 'Đăng nhập thất bại';
+                    showElement(document.getElementById('login-error'));
                 }
             } catch (error) {
                 console.error('Login error:', error);
-                loginError.textContent = 'Đã xảy ra lỗi khi đăng nhập';
-                showElement(loginError);
+                document.getElementById('login-error').textContent = 'Đã xảy ra lỗi khi đăng nhập';
+                showElement(document.getElementById('login-error'));
             }
         });
 
-        registerFormElement.addEventListener('submit', async (e) => {
+        // Xử lý đăng ký
+        document.getElementById('register-form-element').addEventListener('submit', async (e) => {
             e.preventDefault();
 
             const username = document.getElementById('register-username').value;
@@ -292,13 +947,13 @@
             const password2 = document.getElementById('register-password2').value;
 
             if (password !== password2) {
-                registerError.textContent = 'Mật khẩu không khớp';
-                showElement(registerError);
+                document.getElementById('register-error').textContent = 'Mật khẩu không khớp';
+                showElement(document.getElementById('register-error'));
                 return;
             }
 
             try {
-                const response = await fetch(REGISTER_URL, {
+                const response = await fetch('/api/users/register/', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -315,8 +970,8 @@
                 });
 
                 if (response.ok) {
-                    registerFormElement.reset();
-                    showLogin();
+                    document.getElementById('register-form-element').reset();
+                    showPage('login-form');
                     alert('Đăng ký thành công! Vui lòng đăng nhập.');
                 } else {
                     const errorData = await response.json();
@@ -328,19 +983,20 @@
                             .join(', ');
                     }
 
-                    registerError.textContent = errorMessage;
-                    showElement(registerError);
+                    document.getElementById('register-error').textContent = errorMessage;
+                    showElement(document.getElementById('register-error'));
                 }
             } catch (error) {
                 console.error('Register error:', error);
-                registerError.textContent = 'Đã xảy ra lỗi khi đăng ký';
-                showElement(registerError);
+                document.getElementById('register-error').textContent = 'Đã xảy ra lỗi khi đăng ký';
+                showElement(document.getElementById('register-error'));
             }
         });
 
-        logoutButton.addEventListener('click', async () => {
+        // Xử lý đăng xuất
+        document.getElementById('logout-button').addEventListener('click', async () => {
             try {
-                const response = await fetch(LOGOUT_URL, {
+                const response = await fetch('/api/users/logout/', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -357,8 +1013,41 @@
             }
         });
 
-        document.addEventListener('DOMContentLoaded', () => {
-            checkLoggedIn();
+        // Các sự kiện điều hướng
+        document.getElementById('login-button').addEventListener('click', () => {
+            showPage('login-form');
+        });
+
+        document.getElementById('register-button').addEventListener('click', () => {
+            showPage('register-form');
+        });
+
+        document.getElementById('to-register-link').addEventListener('click', (e) => {
+            e.preventDefault();
+            showPage('register-form');
+        });
+
+        document.getElementById('to-login-link').addEventListener('click', (e) => {
+            e.preventDefault();
+            showPage('login-form');
+        });
+
+        document.getElementById('home-link').addEventListener('click', (e) => {
+            e.preventDefault();
+            showPage('home');
+        });
+
+        // Các nút điều hướng trên trang chủ
+        document.getElementById('play-pong-btn')?.addEventListener('click', () => {
+            showPage('games');
+        });
+
+        document.getElementById('tournament-btn')?.addEventListener('click', () => {
+            showPage('tournament');
+        });
+
+        document.getElementById('goto-chat-btn')?.addEventListener('click', () => {
+            showPage('chat');
         });
     </script>
 </body>

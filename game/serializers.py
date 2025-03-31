@@ -17,8 +17,10 @@ class GameSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Game
-        fields = ('id', 'status', 'created_at', 'updated_at', 'is_tournament', 'tournament_name',
-                  'max_score', 'enable_powerups', 'ball_speed', 'paddle_size', 'players')
+        fields = ('id', 'status', 'created_at', 'updated_at', 'is_tournament',
+                  'tournament_name', 'max_score', 'enable_powerups', 'ball_speed',
+                  'paddle_size', 'players', 'ai_enabled', 'ai_difficulty',
+                  'powerup_frequency', 'max_players', 'game_type')
         read_only_fields = ('id', 'created_at', 'updated_at')
 
 

@@ -5,7 +5,11 @@
 
 class PongGame {
     constructor(canvasId, options = {}) {
+        if (this.options.enablePowerups) {
+            this.powerupManager = new PowerupManager(this);
+        }
         // Khởi tạo canvas và context
+        this.lastBallPosition = { x: 0, y: 0 };
         this.canvas = document.getElementById(canvasId);
         this.ctx = this.canvas.getContext('2d');
 
@@ -50,6 +54,21 @@ class PongGame {
 
     // Khởi tạo lại trạng thái game
     resetGame() {
+
+        if (this.aiActive) {
+            this.ai = new PongAI({
+                difficulty: this.options.aiDifficulty,
+                paddleHeight: this.options.paddleHeight,
+                initialY: this.rightPaddle.y,
+                fieldHeight: this.options.height,
+                fieldWidth: this.options.width
+            });
+        }
+
+        if (this.options.enablePowerups && this.powerupManager) {
+            this.powerupManager.reset();
+        }
+
         // Vị trí và kích thước các đối tượng
         this.leftPaddle = {
             x: 20,
@@ -352,6 +371,9 @@ class PongGame {
 
     // Cập nhật vị trí các đối tượng
     update(deltaTime) {
+        if (this.options.enablePowerups && this.powerupManager) {
+            this.powerupManager.update(deltaTime);
+        }
         // Di chuyển paddle trái
         if (this.leftPaddle.moving === -1) {
             this.leftPaddle.y -= this.leftPaddle.speed;
@@ -473,58 +495,37 @@ class PongGame {
 
     // Cập nhật AI
     updateAI() {
-        // Dự đoán vị trí của bóng
-        if (this.ball.speedX > 0) { // Bóng đang di chuyển về phía AI
-            // Dự đoán vị trí mà bóng sẽ chạm đến phía phải
-            const timeToReach = (this.options.width - this.ball.x) / this.ball.speedX;
-            let predictedY = this.ball.y + this.ball.speedY * timeToReach;
+        const currentTime = Date.now();
 
-            // Tính toán số lần nảy trên tường
-            while (predictedY < 0 || predictedY > this.options.height) {
-                if (predictedY < 0) {
-                    predictedY = -predictedY;
-                } else if (predictedY > this.options.height) {
-                    predictedY = 2 * this.options.height - predictedY;
-                }
-            }
+        // Gọi hàm update của AI
+        this.rightPaddle.y = this.ai.update(
+            this.ball.x,
+            this.ball.y,
+            this.ball.speedX,
+            this.ball.speedY,
+            currentTime
+        );
 
-            // Thêm lỗi dự đoán dựa vào độ khó
-            let errorMargin;
-            if (this.options.aiDifficulty === 'easy') {
-                errorMargin = 40;
-            } else if (this.options.aiDifficulty === 'medium') {
-                errorMargin = 20;
-            } else { // hard
-                errorMargin = 10;
-            }
-
-            const error = (Math.random() * 2 - 1) * errorMargin;
-            predictedY += error;
-
-            // Giới hạn vị trí dự đoán
-            predictedY = Math.max(this.rightPaddle.height / 2, Math.min(this.options.height - this.rightPaddle.height / 2, predictedY));
-
-            // Di chuyển paddle dựa vào dự đoán
-            const paddleCenter = this.rightPaddle.y + this.rightPaddle.height / 2;
-
-            // Giới hạn tốc độ di chuyển AI dựa vào độ khó
-            let maxSpeed;
-            if (this.options.aiDifficulty === 'easy') {
-                maxSpeed = 3;
-            } else if (this.options.aiDifficulty === 'medium') {
-                maxSpeed = 5;
-            } else { // hard
-                maxSpeed = 7;
-            }
-
-            if (paddleCenter < predictedY - 5) {
-                this.rightPaddle.y += Math.min(maxSpeed, predictedY - paddleCenter);
-            } else if (paddleCenter > predictedY + 5) {
-                this.rightPaddle.y -= Math.min(maxSpeed, paddleCenter - predictedY);
+        // Ghi nhận va chạm và bỏ lỡ cho AI học tập
+        if (this.lastBallPosition.x > this.ball.x && this.ball.x > this.options.width / 2) {
+            // Bóng đang đi về phía phải và đã qua giữa sân
+            if (this.ball.speedX < 0) {
+                // Bóng vừa nảy lại, nghĩa là AI đã đánh trúng
+                this.ai.recordHit();
             }
         }
-    }
 
+        // Nếu bóng đã ra ngoài biên phải, AI bỏ lỡ
+        if (this.ball.x > this.options.width) {
+            this.ai.recordMiss();
+        }
+
+        // Lưu vị trí bóng để kiểm tra va chạm
+        this.lastBallPosition = {
+            x: this.ball.x,
+            y: this.ball.y
+        };
+    }
     // Đặt lại vị trí bóng
     resetBall() {
         this.ball.x = this.options.width / 2;
@@ -625,6 +626,9 @@ class PongGame {
 
     // Vẽ các đối tượng trong game
     draw() {
+        if (this.options.enablePowerups && this.powerupManager) {
+            this.powerupManager.drawPowerups(this.ctx);
+        }
         // Vẽ paddle trái
         this.ctx.fillStyle = this.leftPaddle.color;
         this.ctx.fillRect(this.leftPaddle.x, this.leftPaddle.y, this.leftPaddle.width, this.leftPaddle.height);
@@ -668,6 +672,18 @@ class PongGame {
             this.ctx.textAlign = 'center';
             this.ctx.fillText(this.gameState.message, this.options.width / 2, this.options.height / 2 + 10);
         }
+
+        // Hiển thị thông báo power-up
+        if (this.powerupMessage && Date.now() - this.powerupMessage.time < this.powerupMessage.duration) {
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            this.ctx.fillRect(this.options.width / 2 - 150, 20, 300, 40);
+
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.font = '16px Arial';
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText(this.powerupMessage.text, this.options.width / 2, 45);
+        }
+
 
         // Vẽ chỉ dẫn nếu game chưa bắt đầu
         if (!this.gameState.running && !this.gameState.finished) {
@@ -805,6 +821,19 @@ class PongGame {
             this.ctx.fill();
         }
     }
+
+    showPowerupMessage(powerupName, player) {
+        const playerName = player === 'left' ? 'Trái' : 'Phải';
+        const message = `${playerName}: ${powerupName}`;
+
+        // Hiển thị thông báo
+        this.powerupMessage = {
+            text: message,
+            time: Date.now(),
+            duration: 2000 // 2 giây
+        };
+    }
+
 
     // Lấy paddle của đối phương
     getOpponentPaddle() {

@@ -30,7 +30,16 @@ services:
       - DJANGO_SUPERUSER_EMAIL=${DJANGO_SUPERUSER_EMAIL}
     depends_on:
       - db
+      - redis
     restart: always
 
+  redis:
+    image: redis:alpine
+    ports:
+      - "${EXPORT_REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+
 volumes:
+  redis_data:
   postgres_data:

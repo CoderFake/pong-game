@@ -12,20 +12,26 @@ class PongAI {
         this.paddleHeight = options.paddleHeight || 100;
         this.paddleY = options.initialY || 250;
         this.fieldHeight = options.fieldHeight || 500;
+        this.fieldWidth = options.fieldWidth || 800;
 
         // Lưu trữ thông tin bóng để dự đoán
         this.ballHistory = [];
-        this.maxHistory = 5;
+        this.maxHistory = 10; // Tăng lên để có dự đoán tốt hơn
 
-        // Biến dự đoán
+        // Trạng thái dự đoán
         this.targetY = this.paddleY;
         this.predictedY = null;
-
-        // Thời gian
-        this.lastUpdateTime = 0;
+        this.lastPredictionTime = 0;
+        this.predictionDelay = 1000; // 1 giây - mô phỏng thời gian phản ứng của người
 
         // Thiết lập thông số dựa trên độ khó
         this.setupDifficulty();
+
+        // Trạng thái học tập (reinforcement learning đơn giản)
+        this.learningRate = 0.1;
+        this.successes = 0;
+        this.mistakes = 0;
+        this.lastHitSuccess = false;
     }
 
     // Thiết lập thông số dựa vào độ khó
@@ -36,6 +42,7 @@ class PongAI {
                 this.errorMargin = 40;    // Lỗi dự đoán lớn
                 this.predictionSkill = 0.6; // Khả năng dự đoán kém
                 this.maxSpeed = 3;        // Di chuyển chậm
+                this.anticipationFactor = 0.3; // Khả năng dự đoán bật bóng thấp
                 break;
 
             case 'medium':
@@ -43,6 +50,7 @@ class PongAI {
                 this.errorMargin = 20;
                 this.predictionSkill = 0.8;
                 this.maxSpeed = 5;
+                this.anticipationFactor = 0.6;
                 break;
 
             case 'hard':
@@ -50,6 +58,7 @@ class PongAI {
                 this.errorMargin = 10;    // Lỗi dự đoán nhỏ
                 this.predictionSkill = 0.95; // Khả năng dự đoán gần như hoàn hảo
                 this.maxSpeed = 7;        // Di chuyển nhanh
+                this.anticipationFactor = 0.9; // Khả năng dự đoán bật bóng cao
                 break;
 
             default:
@@ -57,42 +66,51 @@ class PongAI {
                 this.errorMargin = 20;
                 this.predictionSkill = 0.8;
                 this.maxSpeed = 5;
+                this.anticipationFactor = 0.6;
         }
     }
 
     // Cập nhật vị trí paddle của AI
     update(ballX, ballY, ballSpeedX, ballSpeedY, currentTime) {
+        // Thêm thông tin bóng vào lịch sử để phân tích
+        this.updateBallHistory(ballX, ballY, ballSpeedX, ballSpeedY);
+
         // Chỉ cập nhật khi đủ thời gian phản ứng
-        if (currentTime - this.lastUpdateTime < this.reactionTime) {
-            return this.paddleY;
+        if (currentTime - this.lastPredictionTime < this.reactionTime) {
+            return this.moveTowardsTarget();
         }
 
-        // Cập nhật thời gian
-        this.lastUpdateTime = currentTime;
+        // Cập nhật thời gian dự đoán
+        this.lastPredictionTime = currentTime;
 
-        // Thêm thông tin bóng vào lịch sử để phân tích
-        this.ballHistory.push({x: ballX, y: ballY, dx: ballSpeedX, dy: ballSpeedY});
+        // Dự đoán vị trí bóng khi đến paddle
+        if (ballSpeedX > 0) { // Bóng đang di chuyển về phía AI (phải)
+            this.predictBallPosition(ballX, ballY, ballSpeedX, ballSpeedY);
+        } else {
+            // Khi bóng đi ngược lại, AI di chuyển về vị trí trung tâm
+            this.targetY = this.fieldHeight / 2;
+        }
+
+        return this.moveTowardsTarget();
+    }
+
+    // Cập nhật lịch sử bóng
+    updateBallHistory(ballX, ballY, ballSpeedX, ballSpeedY) {
+        this.ballHistory.push({
+            x: ballX,
+            y: ballY,
+            dx: ballSpeedX,
+            dy: ballSpeedY,
+            timestamp: Date.now()
+        });
+
         if (this.ballHistory.length > this.maxHistory) {
             this.ballHistory.shift();
         }
+    }
 
-        // Dự đoán vị trí bóng khi chạm đến paddle của AI
-        if (ballSpeedX > 0) { // Bóng đang di chuyển về phía AI (phải)
-            this.predictBallPosition(ballX, ballY, ballSpeedX, ballSpeedY);
-        }
-
-        // Di chuyển paddle dựa vào dự đoán
-        if (this.predictedY !== null) {
-            // Thêm lỗi dự đoán để tăng tính người thật
-            const error = (Math.random() * 2 - 1) * this.errorMargin;
-            const targetY = this.predictedY + error;
-
-            // Giới hạn trong khoảng hợp lệ
-            this.targetY = Math.max(this.paddleHeight / 2,
-                          Math.min(this.fieldHeight - this.paddleHeight / 2, targetY));
-        }
-
-        // Di chuyển paddle với tốc độ giới hạn
+    // Di chuyển về phía mục tiêu với tốc độ giới hạn
+    moveTowardsTarget() {
         const paddleCenter = this.paddleY + this.paddleHeight / 2;
         const distance = this.targetY - paddleCenter;
 
@@ -101,7 +119,7 @@ class PongAI {
             this.paddleY += Math.sign(distance) * this.maxSpeed;
         } else {
             // Di chuyển trực tiếp đến vị trí mục tiêu
-            this.paddleY += distance;
+            this.paddleY = this.targetY - this.paddleHeight / 2;
         }
 
         // Giới hạn paddle trong khoảng hợp lệ
@@ -114,31 +132,108 @@ class PongAI {
     predictBallPosition(ballX, ballY, ballSpeedX, ballSpeedY) {
         if (ballSpeedX <= 0) return; // Bóng đang di chuyển về phía khác
 
+        // Phân tích quỹ đạo bóng dựa trên lịch sử
+        const trajectory = this.analyzeBallTrajectory();
+
+        // Vị trí paddle phải
+        const rightSideX = this.fieldWidth - 20 - 10; // paddle width + ball radius
+
         // Tính toán thời gian để bóng đến paddle phải
-        const rightSideX = 800 - 20 - this.paddleHeight/2; // Vị trí paddle phải
         const timeToReach = (rightSideX - ballX) / ballSpeedX;
 
-        // Tính toán vị trí y của bóng tại thời điểm đó
+        // Tính toán vị trí y của bóng khi đến paddle
         let predictedY = ballY + (ballSpeedY * timeToReach);
 
         // Xử lý các lần nảy trên tường
-        const bounces = Math.floor(Math.abs(predictedY) / this.fieldHeight) +
-                       Math.floor(Math.abs(predictedY - this.fieldHeight) / this.fieldHeight);
+        predictedY = this.calculateBouncePosition(predictedY);
 
-        if (bounces % 2 === 1) {
-            predictedY = this.fieldHeight - Math.abs(predictedY % this.fieldHeight);
-        } else {
-            predictedY = Math.abs(predictedY % this.fieldHeight);
+        // Áp dụng điều chỉnh dựa trên phân tích quỹ đạo
+        if (trajectory.accelerating) {
+            // Bóng đang tăng tốc, điều chỉnh dự đoán
+            predictedY += trajectory.acceleration * timeToReach * this.anticipationFactor;
         }
 
         // Áp dụng độ chính xác dự đoán dựa vào độ khó
-        if (this.predictionSkill < 1.0) {
-            const skillError = (1.0 - this.predictionSkill) * this.fieldHeight * (Math.random() - 0.5);
-            predictedY += skillError;
+        if (Math.random() > this.predictionSkill) {
+            const errorAmount = (Math.random() * 2 - 1) * this.errorMargin;
+            predictedY += errorAmount;
+        }
+
+        // Học hỏi từ các lần dự đoán trước
+        if (this.lastHitSuccess) {
+            // Nếu lần trước thành công, tăng độ tin cậy của dự đoán
+            this.targetY = predictedY * (1 + this.learningRate) - this.paddleHeight / 2;
+        } else {
+            // Nếu lần trước thất bại, điều chỉnh ngược lại
+            this.targetY = predictedY * (1 - this.learningRate) - this.paddleHeight / 2;
         }
 
         // Lưu giá trị dự đoán
         this.predictedY = predictedY;
+    }
+
+    // Tính toán vị trí sau khi nảy
+    calculateBouncePosition(predictedY) {
+        // Tính số lần nảy
+        let bounces = Math.floor(Math.abs(predictedY) / this.fieldHeight) +
+                      Math.floor(Math.abs(predictedY - this.fieldHeight) / this.fieldHeight);
+
+        // Tính vị trí cuối cùng sau các lần nảy
+        if (bounces % 2 === 1) {
+            // Số lẻ lần nảy
+            predictedY = this.fieldHeight - Math.abs(predictedY % this.fieldHeight);
+        } else {
+            // Số chẵn lần nảy
+            predictedY = Math.abs(predictedY % this.fieldHeight);
+        }
+
+        return predictedY;
+    }
+
+    // Phân tích quỹ đạo bóng dựa trên lịch sử
+    analyzeBallTrajectory() {
+        if (this.ballHistory.length < 3) {
+            return { accelerating: false, acceleration: 0 };
+        }
+
+        // Lấy 3 mẫu gần nhất
+        const recent = this.ballHistory.slice(-3);
+
+        // Tính toán thay đổi vận tốc
+        const dvX1 = recent[1].dx - recent[0].dx;
+        const dvX2 = recent[2].dx - recent[1].dx;
+        const dvY1 = recent[1].dy - recent[0].dy;
+        const dvY2 = recent[2].dy - recent[1].dy;
+
+        // Xác định có đang tăng tốc không
+        const acceleratingX = Math.abs(dvX2) > Math.abs(dvX1);
+        const acceleratingY = Math.abs(dvY2) > Math.abs(dvY1);
+
+        return {
+            accelerating: acceleratingX || acceleratingY,
+            acceleration: Math.max(Math.abs(dvY2), Math.abs(dvX2))
+        };
+    }
+
+    // Phản hồi khi va chạm thành công
+    recordHit() {
+        this.lastHitSuccess = true;
+        this.successes++;
+
+        // Tăng độ chính xác dự đoán
+        this.predictionSkill = Math.min(0.99, this.predictionSkill + 0.01);
+    }
+
+    // Phản hồi khi bỏ lỡ bóng
+    recordMiss() {
+        this.lastHitSuccess = false;
+        this.mistakes++;
+
+        // Điều chỉnh chiến lược
+        if (this.mistakes > this.successes) {
+            // Nghiêng về giữa sân nếu có nhiều lỗi
+            this.targetY = this.fieldHeight / 2;
+        }
     }
 
     // Đặt lại AI
@@ -147,6 +242,9 @@ class PongAI {
         this.targetY = this.paddleY;
         this.predictedY = null;
         this.ballHistory = [];
-        this.lastUpdateTime = 0;
+        this.lastPredictionTime = 0;
+        this.successes = 0;
+        this.mistakes = 0;
+        this.lastHitSuccess = false;
     }
 }

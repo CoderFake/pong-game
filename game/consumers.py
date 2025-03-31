@@ -1,4 +1,6 @@
 import json
+import time
+
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from .models import Game, GamePlayer
@@ -12,6 +14,9 @@ class GameConsumer(AsyncWebsocketConsumer):
         self.game_id = self.scope['url_route']['kwargs']['game_id']
         self.game_group_name = f'game_{self.game_id}'
         self.user = self.scope['user']
+
+        if await self.is_ai_game():
+            self.ai = await self.initialize_ai()
 
         await self.channel_layer.group_add(
             self.game_group_name,
@@ -53,6 +58,38 @@ class GameConsumer(AsyncWebsocketConsumer):
     async def receive(self, text_data):
         data = json.loads(text_data)
         message_type = data.get('type')
+
+        if message_type == 'game_update' and hasattr(self, 'ai'):
+            game_state = data.get('game_state')
+            if game_state and 'ball' in game_state:
+                ball = game_state['ball']
+
+                current_time = time.time()
+                ai_y = self.ai.update(
+                    ball['x'], ball['y'],
+                    ball['speedX'], ball['speedY'],
+                    current_time
+                )
+
+                await self.channel_layer.group_send(
+                    self.game_group_name,
+                    {
+                        'type': 'ai_move',
+                        'y_position': ai_y,
+                        'timestamp': current_time
+                    }
+                )
+
+        if message_type == 'powerup_pickup':
+            await self.channel_layer.group_send(
+                self.game_group_name,
+                {
+                    'type': 'powerup_activated',
+                    'powerup_type': data.get('powerup_type'),
+                    'player_side': data.get('player_side'),
+                    'duration': data.get('duration')
+                }
+            )
 
         if message_type == 'game_update':
             await self.channel_layer.group_send(
@@ -152,6 +189,32 @@ class GameConsumer(AsyncWebsocketConsumer):
             'type': 'all_ready'
         }))
 
+    # Cần thêm vào GameConsumer
+    async def ai_move(self, event):
+        """Xử lý di chuyển từ AI nếu chơi với máy"""
+        await self.send(text_data=json.dumps({
+            'type': 'ai_move',
+            'y_position': event['y_position'],
+            'timestamp': event['timestamp']
+        }))
+
+    async def powerup_activated(self, event):
+        """Thông báo khi power-up được kích hoạt"""
+        await self.send(text_data=json.dumps({
+            'type': 'powerup_activated',
+            'powerup_type': event['powerup_type'],
+            'player_side': event['player_side'],
+            'duration': event['duration']
+        }))
+
+    @database_sync_to_async
+    def is_ai_game(self):
+        try:
+            game = Game.objects.get(id=self.game_id)
+            return game.ai_enabled
+        except Game.DoesNotExist:
+            return False
+
     @database_sync_to_async
     def set_player_connected(self, connected):
         try:
@@ -162,6 +225,19 @@ class GameConsumer(AsyncWebsocketConsumer):
             return True
         except (Game.DoesNotExist, GamePlayer.DoesNotExist):
             return False
+
+    @database_sync_to_async
+    def initialize_ai(self):
+        try:
+            game = Game.objects.get(id=self.game_id)
+            from .ai import PongAI
+            return PongAI(
+                difficulty=game.ai_difficulty,
+                field_height=500,
+                field_width=800
+            )
+        except Game.DoesNotExist:
+            return None
 
     @database_sync_to_async
     def set_player_ready(self):

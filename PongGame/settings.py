@@ -47,6 +47,8 @@ INSTALLED_APPS = [
     "rest_framework",
 
     "users",
+    "game",
+    "chat",
 ]
 
 MIDDLEWARE = [
@@ -141,7 +143,17 @@ if not DEBUG:
 # Internationalization
 # https://docs.djangoproject.com/en/5.1/topics/i18n/
 
-LANGUAGE_CODE = "vi"
+LANGUAGE_CODE = 'vi'
+LANGUAGES = [
+    ('vi', 'Vietnamese'),
+    ('en', 'English'),
+]
+
+
+LOCALE_PATHS = [
+    BASE_DIR / 'locale',
+]
+
 TIME_ZONE = os.environ.get('TIME_ZONE', 'Asia/Ho_Chi_Minh')
 USE_I18N = True
 USE_TZ = True
@@ -181,6 +193,20 @@ if not DEBUG:
     SECURE_CONTENT_TYPE_NOSNIFF = True
     SECURE_BROWSER_XSS_FILTER = True
     X_FRAME_OPTIONS = "DENY"
+
+
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+CSRF_COOKIE_SAMESITE = 'Strict'
+SESSION_COOKIE_SAMESITE = 'Strict'
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [(os.environ.get('REDIS_HOST', 'redis'), 6379)],
+        },
+    },
+}
 
 # Logging configuration
 LOGGING = {

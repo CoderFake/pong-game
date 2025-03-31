@@ -3,6 +3,8 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
+from rest_framework.views import APIView
+
 from .models import Game, GamePlayer, Tournament, TournamentPlayer, TournamentMatch
 from .serializers import (
     GameSerializer, CreateGameSerializer, JoinGameSerializer,
@@ -214,6 +216,66 @@ class GameViewSet(viewsets.ModelViewSet):
 
         return Response(GameSerializer(game).data)
 
+    @action(detail=True, methods=['post'])
+    def ai_game(self, request, pk=None):
+        game = self.get_object()
+
+        # Kiểm tra xem game có ở trạng thái phù hợp không
+        if game.status != 'waiting':
+            return Response(
+                {"error": "Game is not in waiting state"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Kích hoạt AI và thiết lập độ khó
+        game.ai_enabled = True
+        game.ai_difficulty = request.data.get('difficulty', 'medium')
+        game.save()
+
+        # Tạo player AI
+        if not GamePlayer.objects.filter(game=game, is_ai=True).exists():
+            GamePlayer.objects.create(
+                game=game,
+                user=None,  # AI không có user
+                side='right',
+                is_ai=True
+            )
+
+        return Response(GameSerializer(game).data)
+
+
+class GameCustomizationAPIView(APIView):
+    """API cung cấp các tùy chọn tùy biến game"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        """Trả về danh sách các tùy chọn tùy biến game"""
+        options = {
+            'paddle_sizes': [
+                {'id': 'small', 'name': 'Nhỏ', 'value': 75},
+                {'id': 'medium', 'name': 'Trung bình', 'value': 100},
+                {'id': 'large', 'name': 'Lớn', 'value': 125}
+            ],
+            'ball_speeds': [
+                {'id': 'slow', 'name': 'Chậm', 'value': 0.8},
+                {'id': 'medium', 'name': 'Trung bình', 'value': 1.0},
+                {'id': 'fast', 'name': 'Nhanh', 'value': 1.2}
+            ],
+            'ai_difficulties': [
+                {'id': 'easy', 'name': 'Dễ'},
+                {'id': 'medium', 'name': 'Trung bình'},
+                {'id': 'hard', 'name': 'Khó'}
+            ],
+            'powerups': [
+                {'id': 'bigger_paddle', 'name': 'Paddle lớn hơn', 'color': '#3CB371'},
+                {'id': 'smaller_opponent', 'name': 'Thu nhỏ đối thủ', 'color': '#FF6347'},
+                {'id': 'faster_paddle', 'name': 'Paddle nhanh hơn', 'color': '#4169E1'},
+                {'id': 'ball_speed', 'name': 'Tốc độ bóng', 'color': '#FFD700'},
+                {'id': 'curved_ball', 'name': 'Bóng cong', 'color': '#9932CC'}
+            ]
+        }
+
+        return Response(options)
 
 class TournamentViewSet(viewsets.ModelViewSet):
     serializer_class = TournamentSerializer

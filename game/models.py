@@ -17,8 +17,30 @@ class Game(models.Model):
     tournament_name = models.CharField(max_length=100, blank=True, null=True)
     max_score = models.IntegerField(default=5)
 
-    # Game customization options
+    ai_enabled = models.BooleanField(default=False)
+    ai_difficulty = models.CharField(
+        max_length=10,
+        choices=[('easy', 'Easy'), ('medium', 'Medium'), ('hard', 'Hard')],
+        default='medium'
+    )
+
+    # Thêm các trường cho Power-ups
     enable_powerups = models.BooleanField(default=False)
+    powerup_frequency = models.IntegerField(default=10)  # seconds
+
+    # Thêm các trường cho multiplayer
+    max_players = models.IntegerField(default=2)
+    game_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('classic', 'Classic 1v1'),
+            ('tournament', 'Tournament'),
+            ('multiplayer', 'Multiplayer')
+        ],
+        default='classic'
+    )
+
+    # Game customization options
     ball_speed = models.FloatField(default=1.0)  # Multiplier
     paddle_size = models.CharField(max_length=10, default='medium',
                                    choices=[('small', 'Small'), ('medium', 'Medium'), ('large', 'Large')])
@@ -40,6 +62,7 @@ class GamePlayer(models.Model):
     ready = models.BooleanField(default=False)
     connected = models.BooleanField(default=True)
     joined_at = models.DateTimeField(auto_now_add=True)
+    is_ai = models.BooleanField(default=False)
 
     class Meta:
         verbose_name = _('Game Player')
@@ -118,3 +141,6 @@ class TournamentMatch(models.Model):
         p1 = self.player1.user.display_name if self.player1 else "TBD"
         p2 = self.player2.user.display_name if self.player2 else "TBD"
         return f"{p1} vs {p2} - Round {self.round_number} Match {self.match_number}"
+
+
+

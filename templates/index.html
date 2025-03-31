@@ -760,31 +760,7 @@
         </div>
     </div>
 
-    <!-- JavaScript Libraries -->
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/js/all.min.js"></script>
-
-    <!-- Game Engine Scripts -->
-    <script src="/static/js/pong-ai.js"></script>
-    <script src="/static/js/game-powerups.js"></script>
-    <script src="/static/js/pong-game.js"></script>
-    <script src="/static/js/game-interface.js"></script>
-    <script src="/static/js/spa-router.js"></script>
-    <script src="/static/js/chat-manager.js"></script>
-    <script src="/static/js/user-manager.js"></script>
-    <script src="/static/js/tournament-manager.js"></script>
-
     <script>
-        let userId = null;
-        let currentUser = null;
-
-        // Kiểm tra đăng nhập khi tải trang
-        $(document).ready(function() {
-            checkLoggedIn();
-            initSpaRouter();
-        });
-
         function getCookie(name) {
             let cookieValue = null;
             if (document.cookie && document.cookie !== '') {
@@ -799,6 +775,22 @@
             }
             return cookieValue;
         }
+    </script>
+
+    <!-- JavaScript Libraries -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/js/all.min.js"></script>
+
+    <script>
+        let userId = null;
+        let currentUser = null;
+
+        // Kiểm tra đăng nhập khi tải trang
+        $(document).ready(function() {
+            checkLoggedIn();
+            initSpaRouter();
+        });
 
         async function checkLoggedIn() {
             try {
@@ -830,7 +822,6 @@
             userId = user.id;
             currentUser = user;
 
-            // Cập nhật UI
             hideElement(document.getElementById('auth-buttons'));
             showElement(document.getElementById('user-profile-nav'));
             document.getElementById('user-welcome').textContent = `Xin chào, ${user.display_name || user.username}`;
@@ -873,11 +864,17 @@
         }
 
         function showElement(element) {
-            if (element) element.classList.remove('hidden');
+            if (element) {
+                element.classList.remove('hidden');
+                element.style.display = 'block';
+            }
         }
 
         function hideElement(element) {
-            if (element) element.classList.add('hidden');
+            if (element) {
+                element.classList.add('hidden');
+                element.style.display = 'none';
+            }
         }
 
         function showPage(pageId) {
@@ -890,6 +887,10 @@
             const pageElement = document.getElementById(`${pageId}-content`);
             if (pageElement) {
                 showElement(pageElement);
+            } else if (pageId === 'login-form') {
+                showElement(document.getElementById('login-form'));
+            } else if (pageId === 'register-form') {
+                showElement(document.getElementById('register-form'));
             } else if (pageId === 'game-container') {
                 showElement(document.getElementById('game-container'));
             } else if (pageId === 'waiting-screen') {
@@ -901,6 +902,7 @@
                 showElement(document.getElementById('home-content'));
             }
         }
+
 
         // Xử lý đăng nhập
         document.getElementById('login-form-element').addEventListener('submit', async (e) => {
@@ -1014,7 +1016,6 @@
             }
         });
 
-        // Các sự kiện điều hướng
         document.getElementById('login-button').addEventListener('click', () => {
             showPage('login-form');
         });
@@ -1051,5 +1052,15 @@
             showPage('chat');
         });
     </script>
+
+    <!-- Game Engine Scripts -->
+    <script src="/static/js/pong-ai.js"></script>
+    <script src="/static/js/game-powerups.js"></script>
+    <script src="/static/js/pong-game.js"></script>
+    <script src="/static/js/game-interface.js"></script>
+    <script src="/static/js/spa-router.js"></script>
+    <script src="/static/js/chat-manager.js"></script>
+    <script src="/static/js/user-manager.js"></script>
+    <script src="/static/js/tournament-manager.js"></script>
 </body>
 </html>

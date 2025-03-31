@@ -31,7 +31,7 @@ class LoginView(APIView):
             user.save()
             serializer = UserSerializer(user)
             return Response(serializer.data)
-        return Response({"error": "Invalid credentials"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": "Tên đăng nhập hoặc mật khẩu không đúng!"}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class LogoutView(APIView):

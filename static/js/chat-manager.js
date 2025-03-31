@@ -7,13 +7,11 @@ let chatSocket = null;
 let currentChatRecipient = null;
 
 function initChatManager(user) {
-    // Khởi tạo WebSocket cho chat
-    connectChatWebSocket();
+    if (user && user.id) {
+        connectChatWebSocket();
+    }
 
-    // Tải danh sách bạn bè cho chat
     loadChatFriendsList();
-
-    // Thiết lập sự kiện
     setupChatEvents();
 }
 

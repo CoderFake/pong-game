@@ -212,12 +212,15 @@ function loadFriendRequests() {
     $.ajax({
         url: '/api/users/friendships/',
         method: 'GET',
-        success: function(friendships) {
+        success: function(response) {
             const friendRequests = $('#friend-requests');
             friendRequests.empty();
 
+            // Đảm bảo dữ liệu là mảng
+            const friendshipsArray = Array.isArray(response) ? response : (response.results || []);
+
             // Lọc ra các lời mời đang chờ
-            const pendingRequests = friendships.filter(fr => fr.status === 'pending' && fr.to_user.id === userId);
+            const pendingRequests = friendshipsArray.filter(fr => fr.status === 'pending' && fr.to_user.id === userId);
 
             if (pendingRequests.length > 0) {
                 pendingRequests.forEach(request => {
@@ -313,7 +316,10 @@ function removeFriend(friendId) {
     $.ajax({
         url: '/api/users/friendships/',
         method: 'GET',
-        success: function(friendships) {
+        success: function(response) {
+            // Đảm bảo dữ liệu là mảng
+            const friendships = Array.isArray(response) ? response : (response.results || []);
+
             // Tìm friendship giữa user hiện tại và friend
             const friendship = friendships.find(fs =>
                 (fs.from_user.id === userId && fs.to_user.id === friendId) ||

@@ -17,4 +17,6 @@ if [ "$DJANGO_SUPERUSER_USERNAME" ] && [ "$DJANGO_SUPERUSER_PASSWORD" ] && [ "$D
   python manage.py createsuperuser --noinput
 fi
 
+daphne PongGame.asgi:application
+
 exec "$@"

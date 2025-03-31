@@ -778,9 +778,9 @@
     </script>
 
     <!-- JavaScript Libraries -->
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/js/all.min.js"></script>
+    <script src="/static/js/jquery-3.7.1.min.js"></script>
+    <script src="/static/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/all.min.js"></script>
 
     <script>
         let userId = null;
@@ -789,8 +789,107 @@
         // Kiểm tra đăng nhập khi tải trang
         $(document).ready(function() {
             checkLoggedIn();
+
+            // Thiết lập sự kiện cho các nút trong modal
+            setupModalEvents();
+
+            // Khởi tạo SPA router
             initSpaRouter();
         });
+
+        // Thiết lập sự kiện cho các modal
+        function setupModalEvents() {
+            console.log("Setting up modal events");
+
+            // Modal tạo game
+            $('#create-game-btn').on('click', function() {
+                console.log("Create game button clicked");
+                $('#create-game-modal').modal('show');
+            });
+
+            $('#create-game-submit').on('click', function() {
+                console.log("Create game submit clicked");
+                createNewGame();
+            });
+
+            // Modal tham gia game
+            $('#join-game-btn').on('click', function() {
+                console.log("Join game button clicked");
+                loadAvailableGames();
+                $('#join-game-modal').modal('show');
+            });
+
+            // Modal chơi với AI
+            $('#play-ai-btn').on('click', function() {
+                console.log("Play AI button clicked");
+                $('#ai-game-modal').modal('show');
+            });
+
+            $('#ai-game-submit').on('click', function() {
+                console.log("AI game submit clicked");
+                startAIGame();
+            });
+
+            // Modal tạo giải đấu
+            $('#create-tournament-btn').on('click', function() {
+                console.log("Create tournament button clicked");
+                $('#create-tournament-modal').modal('show');
+            });
+
+            $('#create-tournament-submit').on('click', function() {
+                console.log("Create tournament submit clicked");
+                createTournament();
+            });
+
+            // Modal chỉnh sửa hồ sơ
+            $('#edit-profile-btn').on('click', function() {
+                console.log("Edit profile button clicked");
+                // Tải thông tin hiện tại
+                $.ajax({
+                    url: '/api/users/me/',
+                    method: 'GET',
+                    success: function(user) {
+                        $('#edit-display-name').val(user.display_name || user.username);
+                        if (user.avatar) {
+                            $('#avatar-preview').attr('src', user.avatar);
+                        }
+                        $('#edit-profile-modal').modal('show');
+                    },
+                    error: function(error) {
+                        console.error('Lỗi khi tải thông tin người dùng:', error);
+                        alert('Đã xảy ra lỗi khi tải thông tin hồ sơ.');
+                    }
+                });
+            });
+
+            $('#save-profile-btn').on('click', function() {
+                console.log("Save profile button clicked");
+                updateProfile();
+            });
+
+            // Modal mời chơi game
+            $('#invite-game-btn').on('click', function() {
+                console.log("Invite game button clicked");
+                $('#invite-game-modal').modal('show');
+            });
+
+            $('#send-invite-btn').on('click', function() {
+                console.log("Send invite button clicked");
+                sendGameInvite();
+            });
+
+            // Sự kiện xem trước avatar
+            $('#avatar-upload').on('change', function() {
+                const file = this.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        $('#avatar-preview').attr('src', e.target.result);
+                    }
+                    reader.readAsDataURL(file);
+                }
+            });
+        }
 
         async function checkLoggedIn() {
             try {
@@ -836,10 +935,18 @@
             showElement(document.getElementById('home-authenticated'));
 
             // Khởi tạo các manager
-            initUserManager(user);
-            initChatManager(user);
-            initGameInterface();
-            initTournamentManager();
+            if (typeof initUserManager === 'function') {
+                initUserManager(user);
+            }
+            if (typeof initChatManager === 'function') {
+                initChatManager(user);
+            }
+            if (typeof initGameInterface === 'function') {
+                initGameInterface();
+            }
+            if (typeof initTournamentManager === 'function') {
+                initTournamentManager();
+            }
         }
 
         function updateUIForLoggedOut() {
@@ -902,7 +1009,6 @@
                 showElement(document.getElementById('home-content'));
             }
         }
-
 
         // Xử lý đăng nhập
         document.getElementById('login-form-element').addEventListener('submit', async (e) => {
@@ -1051,6 +1157,187 @@
         document.getElementById('goto-chat-btn')?.addEventListener('click', () => {
             showPage('chat');
         });
+
+        // Tạo game mới
+        function createNewGame() {
+            const maxScore = parseInt($('#max-score').val());
+            const enablePowerups = $('#enable-powerups').prop('checked');
+            const ballSpeed = parseFloat($('#ball-speed').val());
+            const paddleSize = $('#paddle-size').val();
+
+            console.log("Creating new game:", { maxScore, enablePowerups, ballSpeed, paddleSize });
+
+            $.ajax({
+                url: '/api/game/games/',
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                data: JSON.stringify({
+                    max_score: maxScore,
+                    enable_powerups: enablePowerups,
+                    ball_speed: ballSpeed,
+                    paddle_size: paddleSize
+                }),
+                success: function(response) {
+                    console.log("Game created successfully:", response);
+                    $('#create-game-modal').modal('hide');
+                    showWaitingScreen(response);
+                },
+                error: function(error) {
+                    console.error('Lỗi khi tạo game:', error);
+                    alert('Đã xảy ra lỗi khi tạo game. Vui lòng thử lại.');
+                }
+            });
+        }
+
+        // Bắt đầu game với AI
+        function startAIGame() {
+            // Lấy các tùy chọn
+            const difficulty = $('#ai-difficulty').val();
+            const maxScore = parseInt($('#ai-max-score').val());
+            const enablePowerups = $('#ai-enable-powerups').prop('checked');
+
+            console.log("Starting AI game with options:", { difficulty, maxScore, enablePowerups });
+
+            // Ẩn modal và hiển thị game
+            $('#ai-game-modal').modal('hide');
+            $('#games-content').addClass('hidden');
+            $('#game-container').removeClass('hidden');
+
+            // Tạo hidden input cho phía người chơi
+            $('#game-container').append('<input type="hidden" id="user-side" value="left">');
+
+            // Tạo canvas cho game
+            const canvas = $('<canvas id="game-canvas"></canvas>');
+            $('#game-canvas-container').empty().append(canvas);
+
+            // Hiển thị thông tin game
+            $('#game-info').html(`
+                <div class="mb-3">
+                    <h4>Chế độ AI - ${getDifficultyName(difficulty)}</h4>
+                    <p>Điểm tối đa: ${maxScore} | Power-ups: ${enablePowerups ? 'Có' : 'Không'}</p>
+                </div>
+                <div class="mb-3">
+                    <button id="start-game-btn" class="btn btn-primary">Bắt đầu</button>
+                    <button id="back-to-menu-btn" class="btn btn-secondary ms-2">Trở về Menu</button>
+                </div>
+            `);
+
+            // Khởi tạo game với AI
+            if (typeof PongGame === 'function') {
+                pongGame = new PongGame('game-canvas', {
+                    maxScore: maxScore,
+                    enablePowerups: enablePowerups,
+                    aiEnabled: true,
+                    aiDifficulty: difficulty
+                });
+            }
+
+            // Sự kiện nút bắt đầu
+            $('#start-game-btn').on('click', function() {
+                $(this).prop('disabled', true);
+                if (pongGame) {
+                    pongGame.startGame();
+                }
+            });
+
+            // Sự kiện nút trở về
+            $('#back-to-menu-btn').on('click', function() {
+                $('#game-container').addClass('hidden');
+                $('#games-content').removeClass('hidden');
+                if (pongGame) {
+                    pongGame = null;
+                }
+            });
+        }
+
+        // Tạo giải đấu
+        function createTournament() {
+            const name = $('#tournament-name').val();
+            const description = $('#tournament-description').val();
+            const maxPlayers = $('#tournament-max-players').val();
+            const maxScore = $('#tournament-max-score').val();
+            const enablePowerups = $('#tournament-enable-powerups').prop('checked');
+
+            if (!name) {
+                alert('Vui lòng nhập tên giải đấu.');
+                return;
+            }
+
+            $.ajax({
+                url: '/api/game/tournaments/',
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                data: JSON.stringify({
+                    name: name,
+                    description: description,
+                    max_players: maxPlayers,
+                    max_score: maxScore,
+                    enable_powerups: enablePowerups
+                }),
+                success: function(tournament) {
+                    $('#create-tournament-modal').modal('hide');
+                    $('#create-tournament-form')[0].reset();
+                    alert('Tạo giải đấu thành công!');
+                    window.location.hash = `tournament/${tournament.id}`;
+                },
+                error: function(error) {
+                    console.error('Lỗi khi tạo giải đấu:', error);
+                    alert('Đã xảy ra lỗi khi tạo giải đấu.');
+                }
+            });
+        }
+
+        // Cập nhật hồ sơ
+        function updateProfile() {
+            const displayName = $('#edit-display-name').val();
+            const formData = new FormData();
+
+            formData.append('display_name', displayName);
+
+            const avatarFile = document.getElementById('avatar-upload').files[0];
+            if (avatarFile) {
+                formData.append('avatar', avatarFile);
+            }
+
+            $.ajax({
+                url: '/api/users/me/',
+                method: 'PATCH',
+                processData: false,
+                contentType: false,
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                data: formData,
+                success: function(user) {
+                    $('#profile-display-name').text(user.display_name || user.username);
+                    if (user.avatar) {
+                        $('#user-avatar').attr('src', user.avatar);
+                    }
+
+                    $('#edit-profile-modal').modal('hide');
+                    alert('Cập nhật hồ sơ thành công.');
+                },
+                error: function(error) {
+                    console.error('Lỗi khi cập nhật hồ sơ:', error);
+                    alert('Đã xảy ra lỗi khi cập nhật hồ sơ.');
+                }
+            });
+        }
+
+        function getDifficultyName(difficulty) {
+            switch(difficulty) {
+                case 'easy': return 'Dễ';
+                case 'medium': return 'Trung bình';
+                case 'hard': return 'Khó';
+                default: return 'Trung bình';
+            }
+        }
     </script>
 
     <!-- Game Engine Scripts -->

@@ -16,18 +16,17 @@ class PongAI {
 
         // Lưu trữ thông tin bóng để dự đoán
         this.ballHistory = [];
-        this.maxHistory = 10; // Tăng lên để có dự đoán tốt hơn
+        this.maxHistory = 10; // Số điểm lưu trữ để dự đoán
 
         // Trạng thái dự đoán
         this.targetY = this.paddleY;
         this.predictedY = null;
         this.lastPredictionTime = 0;
-        this.predictionDelay = 1000; // 1 giây - mô phỏng thời gian phản ứng của người
 
         // Thiết lập thông số dựa trên độ khó
         this.setupDifficulty();
 
-        // Trạng thái học tập (reinforcement learning đơn giản)
+        // Trạng thái học tập đơn giản
         this.learningRate = 0.1;
         this.successes = 0;
         this.mistakes = 0;
@@ -132,7 +131,7 @@ class PongAI {
     predictBallPosition(ballX, ballY, ballSpeedX, ballSpeedY) {
         if (ballSpeedX <= 0) return; // Bóng đang di chuyển về phía khác
 
-        // Phân tích quỹ đạo bóng dựa trên lịch sử
+        // Phân tích quỹ đạo bóng
         const trajectory = this.analyzeBallTrajectory();
 
         // Vị trí paddle phải
@@ -170,21 +169,20 @@ class PongAI {
 
         // Lưu giá trị dự đoán
         this.predictedY = predictedY;
+
+        // Đảm bảo targetY hợp lệ
+        this.targetY = Math.max(this.paddleHeight / 2, Math.min(this.fieldHeight - this.paddleHeight / 2, this.targetY));
     }
 
     // Tính toán vị trí sau khi nảy
     calculateBouncePosition(predictedY) {
-        // Tính số lần nảy
-        let bounces = Math.floor(Math.abs(predictedY) / this.fieldHeight) +
-                      Math.floor(Math.abs(predictedY - this.fieldHeight) / this.fieldHeight);
-
-        // Tính vị trí cuối cùng sau các lần nảy
-        if (bounces % 2 === 1) {
-            // Số lẻ lần nảy
-            predictedY = this.fieldHeight - Math.abs(predictedY % this.fieldHeight);
-        } else {
-            // Số chẵn lần nảy
-            predictedY = Math.abs(predictedY % this.fieldHeight);
+        // Xử lý các trường hợp nảy
+        while (predictedY < 0 || predictedY > this.fieldHeight) {
+            if (predictedY < 0) {
+                predictedY = -predictedY; // Nảy ở tường trên
+            } else if (predictedY > this.fieldHeight) {
+                predictedY = 2 * this.fieldHeight - predictedY; // Nảy ở tường dưới
+            }
         }
 
         return predictedY;
@@ -220,7 +218,7 @@ class PongAI {
         this.lastHitSuccess = true;
         this.successes++;
 
-        // Tăng độ chính xác dự đoán
+        // Tăng độ chính xác dự đoán nhưng không quá 0.99
         this.predictionSkill = Math.min(0.99, this.predictionSkill + 0.01);
     }
 

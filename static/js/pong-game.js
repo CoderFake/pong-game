@@ -5,13 +5,14 @@
 
 class PongGame {
     constructor(canvasId, options = {}) {
-        if (this.options.enablePowerups) {
-            this.powerupManager = new PowerupManager(this);
-        }
         // Khởi tạo canvas và context
-        this.lastBallPosition = { x: 0, y: 0 };
         this.canvas = document.getElementById(canvasId);
+        if (!this.canvas) {
+            console.error("Canvas element not found:", canvasId);
+            return;
+        }
         this.ctx = this.canvas.getContext('2d');
+        this.lastBallPosition = { x: 0, y: 0 };
 
         // Các tùy chọn game
         this.options = {
@@ -35,8 +36,33 @@ class PongGame {
         this.canvas.width = this.options.width;
         this.canvas.height = this.options.height;
 
-        // Trạng thái game
+        // Khởi tạo đối tượng game
         this.resetGame();
+
+        // Khởi tạo AI nếu được kích hoạt
+        this.aiActive = this.options.aiEnabled;
+        if (this.aiActive) {
+            if (typeof PongAI === 'function') {
+                this.ai = new PongAI({
+                    difficulty: this.options.aiDifficulty,
+                    paddleHeight: this.options.paddleHeight,
+                    initialY: this.rightPaddle.y,
+                    fieldHeight: this.options.height,
+                    fieldWidth: this.options.width
+                });
+            } else {
+                console.error("PongAI class not found. Make sure to include pong-ai.js before pong-game.js");
+            }
+        }
+
+        // Khởi tạo Power-ups nếu được kích hoạt
+        if (this.options.enablePowerups) {
+            if (typeof PowerupManager === 'function') {
+                this.powerupManager = new PowerupManager(this);
+            } else {
+                console.error("PowerupManager class not found. Make sure to include game-powerups.js before pong-game.js");
+            }
+        }
 
         // WebSocket cho multiplayer
         this.ws = null;
@@ -54,21 +80,6 @@ class PongGame {
 
     // Khởi tạo lại trạng thái game
     resetGame() {
-
-        if (this.aiActive) {
-            this.ai = new PongAI({
-                difficulty: this.options.aiDifficulty,
-                paddleHeight: this.options.paddleHeight,
-                initialY: this.rightPaddle.y,
-                fieldHeight: this.options.height,
-                fieldWidth: this.options.width
-            });
-        }
-
-        if (this.options.enablePowerups && this.powerupManager) {
-            this.powerupManager.reset();
-        }
-
         // Vị trí và kích thước các đối tượng
         this.leftPaddle = {
             x: 20,
@@ -119,15 +130,12 @@ class PongGame {
             finished: false
         };
 
-        // Lập trình AI (nếu kích hoạt)
-        this.aiActive = this.options.aiEnabled;
-        this.aiLastUpdate = 0;
-
         // Power-ups (nếu kích hoạt)
         this.powerups = [];
-        if (this.options.enablePowerups) {
-            this.setupPowerups();
-        }
+        this.powerupMessage = null;
+
+        // AI (nếu kích hoạt)
+        this.aiLastUpdate = 0;
     }
 
     // Thiết lập WebSocket cho multiplayer
@@ -180,6 +188,9 @@ class PongGame {
 
             case 'player_status':
                 // Cập nhật trạng thái kết nối của người chơi
+                const leftUserId = document.querySelector('#game-info')?.dataset?.leftUserId;
+                const rightUserId = document.querySelector('#game-info')?.dataset?.rightUserId;
+
                 if (data.user_id === leftUserId) {
                     this.leftPaddle.connected = data.connected;
                 } else if (data.user_id === rightUserId) {
@@ -204,6 +215,20 @@ class PongGame {
             case 'all_ready':
                 // Tất cả người chơi đã sẵn sàng, bắt đầu game
                 this.startGame();
+                break;
+
+            case 'ai_move':
+                // Cập nhật vị trí từ AI
+                if (this.aiActive) {
+                    this.rightPaddle.y = data.y_position;
+                }
+                break;
+
+            case 'powerup_activated':
+                // Cập nhật trạng thái powerup
+                if (this.options.enablePowerups && this.powerupManager) {
+                    this.showPowerupMessage(data.powerup_type, data.player_side);
+                }
                 break;
         }
     }
@@ -306,7 +331,12 @@ class PongGame {
 
     // Gửi vị trí paddle lên server
     sendPaddlePosition() {
-        const paddle = document.getElementById('user-side').value === 'left' ? this.leftPaddle : this.rightPaddle;
+        const userSideElement = document.getElementById('user-side');
+        if (!userSideElement) return;
+
+        const side = userSideElement.value;
+        const paddle = side === 'left' ? this.leftPaddle : this.rightPaddle;
+
         this.ws.send(JSON.stringify({
             type: 'paddle_move',
             y_position: paddle.y,
@@ -371,9 +401,11 @@ class PongGame {
 
     // Cập nhật vị trí các đối tượng
     update(deltaTime) {
+        // Cập nhật power-ups
         if (this.options.enablePowerups && this.powerupManager) {
             this.powerupManager.update(deltaTime);
         }
+
         // Di chuyển paddle trái
         if (this.leftPaddle.moving === -1) {
             this.leftPaddle.y -= this.leftPaddle.speed;
@@ -394,7 +426,7 @@ class PongGame {
         } else {
             // Cập nhật vị trí AI (chỉ cập nhật 1 lần/giây để mô phỏng thời gian phản ứng của con người)
             const currentTime = Date.now();
-            if (currentTime - this.aiLastUpdate >= 1000) {
+            if (currentTime - this.aiLastUpdate >= 1000 && this.ai) {
                 this.updateAI();
                 this.aiLastUpdate = currentTime;
             }
@@ -406,6 +438,11 @@ class PongGame {
         // Di chuyển bóng
         this.ball.x += this.ball.speedX;
         this.ball.y += this.ball.speedY;
+
+        // Thêm hiệu ứng bóng cong nếu được kích hoạt
+        if (this.ball.isCurved && this.ball.curveDirection) {
+            this.ball.speedY += 0.05 * this.ball.curveDirection;
+        }
 
         // Kiểm tra va chạm với tường trên/dưới
         if (this.ball.y <= this.ball.size || this.ball.y >= this.options.height - this.ball.size) {
@@ -428,6 +465,11 @@ class PongGame {
             const speed = Math.sqrt(this.ball.speedX * this.ball.speedX + this.ball.speedY * this.ball.speedY);
             this.ball.speedX = Math.cos(angle) * speed * 1.05; // Tăng tốc độ mỗi lần nảy
             this.ball.speedY = Math.sin(angle) * speed * 1.05;
+
+            // Ghi nhận va chạm cho AI học tập nếu có
+            if (this.aiActive && this.ai && typeof this.ai.recordHit === 'function') {
+                this.ai.recordHit();
+            }
         }
 
         // Kiểm tra va chạm với paddle phải
@@ -466,6 +508,11 @@ class PongGame {
             } else {
                 this.resetBall();
             }
+
+            // Ghi nhận bỏ lỡ cho AI học tập nếu có
+            if (this.aiActive && this.ai && typeof this.ai.recordMiss === 'function') {
+                this.ai.recordMiss();
+            }
         } else if (this.ball.x > this.options.width) {
             // Điểm cho bên trái
             this.leftPaddle.score++;
@@ -486,19 +533,16 @@ class PongGame {
                 this.resetBall();
             }
         }
-
-        // Cập nhật power-ups (nếu kích hoạt)
-        if (this.options.enablePowerups) {
-            this.updatePowerups();
-        }
     }
 
     // Cập nhật AI
     updateAI() {
+        if (!this.ai || typeof this.ai.update !== 'function') return;
+
         const currentTime = Date.now();
 
         // Gọi hàm update của AI
-        this.rightPaddle.y = this.ai.update(
+        const newY = this.ai.update(
             this.ball.x,
             this.ball.y,
             this.ball.speedX,
@@ -506,18 +550,19 @@ class PongGame {
             currentTime
         );
 
+        if (newY !== undefined) {
+            this.rightPaddle.y = newY;
+        }
+
         // Ghi nhận va chạm và bỏ lỡ cho AI học tập
         if (this.lastBallPosition.x > this.ball.x && this.ball.x > this.options.width / 2) {
             // Bóng đang đi về phía phải và đã qua giữa sân
             if (this.ball.speedX < 0) {
                 // Bóng vừa nảy lại, nghĩa là AI đã đánh trúng
-                this.ai.recordHit();
+                if (typeof this.ai.recordHit === 'function') {
+                    this.ai.recordHit();
+                }
             }
-        }
-
-        // Nếu bóng đã ra ngoài biên phải, AI bỏ lỡ
-        if (this.ball.x > this.options.width) {
-            this.ai.recordMiss();
         }
 
         // Lưu vị trí bóng để kiểm tra va chạm
@@ -525,7 +570,17 @@ class PongGame {
             x: this.ball.x,
             y: this.ball.y
         };
+
+        // Gửi vị trí AI lên server nếu có WebSocket
+        if (this.ws) {
+            this.ws.send(JSON.stringify({
+                type: 'ai_move',
+                y_position: this.rightPaddle.y,
+                timestamp: currentTime
+            }));
+        }
     }
+
     // Đặt lại vị trí bóng
     resetBall() {
         this.ball.x = this.options.width / 2;
@@ -565,11 +620,17 @@ class PongGame {
 
         // Gửi thông báo kết thúc game lên server (nếu có WebSocket)
         if (this.ws && this.options.gameId) {
+            const csrftoken = getCookie('csrftoken');
+            if (!csrftoken) {
+                console.error('CSRF token not found');
+                return;
+            }
+
             fetch(`/api/game/games/${this.options.gameId}/finish/`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
+                    'X-CSRFToken': csrftoken
                 },
                 body: JSON.stringify({
                     winner: winner
@@ -595,17 +656,31 @@ class PongGame {
         }
     }
 
+    // Kiểm tra kết thúc game
+    checkGameOver() {
+        if (this.leftPaddle.score >= this.options.maxScore) {
+            this.endGame('left');
+            return true;
+        } else if (this.rightPaddle.score >= this.options.maxScore) {
+            this.endGame('right');
+            return true;
+        }
+        return false;
+    }
+
     // Hiển thị nút "Trở về"
     showReturnButton() {
         const returnButton = document.createElement('button');
         returnButton.innerText = "Trở về";
         returnButton.className = "btn btn-primary mt-3";
         returnButton.onclick = () => {
-            window.location.href = "/";
+            window.location.hash = "games";
         };
 
-        const container = document.querySelector('.game-container');
-        container.appendChild(returnButton);
+        const container = document.querySelector('#game-info');
+        if (container) {
+            container.appendChild(returnButton);
+        }
     }
 
     // Vẽ background
@@ -626,9 +701,11 @@ class PongGame {
 
     // Vẽ các đối tượng trong game
     draw() {
+        // Vẽ power-ups
         if (this.options.enablePowerups && this.powerupManager) {
             this.powerupManager.drawPowerups(this.ctx);
         }
+
         // Vẽ paddle trái
         this.ctx.fillStyle = this.leftPaddle.color;
         this.ctx.fillRect(this.leftPaddle.x, this.leftPaddle.y, this.leftPaddle.width, this.leftPaddle.height);
@@ -642,11 +719,6 @@ class PongGame {
         this.ctx.beginPath();
         this.ctx.arc(this.ball.x, this.ball.y, this.ball.size, 0, Math.PI * 2);
         this.ctx.fill();
-
-        // Vẽ power-ups (nếu kích hoạt)
-        if (this.options.enablePowerups) {
-            this.drawPowerups();
-        }
     }
 
     // Vẽ giao diện người dùng
@@ -684,7 +756,6 @@ class PongGame {
             this.ctx.fillText(this.powerupMessage.text, this.options.width / 2, 45);
         }
 
-
         // Vẽ chỉ dẫn nếu game chưa bắt đầu
         if (!this.gameState.running && !this.gameState.finished) {
             this.ctx.fillStyle = '#FFFFFF';
@@ -711,117 +782,12 @@ class PongGame {
         if (!this.rightPaddle.connected) {
             this.ctx.fillStyle = 'red';
             this.ctx.font = '12px Arial';
-            this.ctx.fillStyle = 'red';
-            this.ctx.font = '12px Arial';
             this.ctx.textAlign = 'center';
             this.ctx.fillText("Mất kết nối", this.options.width * 3 / 4, 70);
         }
     }
 
-    // Thiết lập power-ups
-    setupPowerups() {
-        this.powerupTypes = [
-            {
-                name: 'paddleSize',
-                color: '#00FF00',
-                duration: 5000,
-                effect: (player) => {
-                    const paddle = player === 'left' ? this.leftPaddle : this.rightPaddle;
-                    const originalHeight = paddle.height;
-                    paddle.height *= 1.5;
-
-                    setTimeout(() => {
-                        paddle.height = originalHeight;
-                    }, 5000);
-                }
-            },
-            {
-                name: 'ballSpeed',
-                color: '#FF0000',
-                duration: 5000,
-                effect: () => {
-                    const originalSpeedX = this.ball.speedX;
-                    const originalSpeedY = this.ball.speedY;
-
-                    this.ball.speedX *= 1.5;
-                    this.ball.speedY *= 1.5;
-
-                    setTimeout(() => {
-                        this.ball.speedX = originalSpeedX;
-                        this.ball.speedY = originalSpeedY;
-                    }, 5000);
-                }
-            },
-            {
-                name: 'paddleSpeed',
-                color: '#0000FF',
-                duration: 5000,
-                effect: (player) => {
-                    const paddle = player === 'left' ? this.leftPaddle : this.rightPaddle;
-                    const originalSpeed = paddle.speed;
-                    paddle.speed *= 1.5;
-
-                    setTimeout(() => {
-                        paddle.speed = originalSpeed;
-                    }, 5000);
-                }
-            }
-        ];
-
-        // Tạo power-up mỗi 10 giây
-        this.powerupInterval = setInterval(() => {
-            if (this.gameState.running && !this.gameState.paused && this.powerups.length < 3) {
-                this.createPowerup();
-            }
-        }, 10000);
-    }
-
-    // Tạo power-up mới
-    createPowerup() {
-        const type = this.powerupTypes[Math.floor(Math.random() * this.powerupTypes.length)];
-
-        const powerup = {
-            x: Math.random() * (this.options.width - 100) + 50,
-            y: Math.random() * (this.options.height - 100) + 50,
-            radius: 10,
-            type: type,
-            active: true
-        };
-
-        this.powerups.push(powerup);
-    }
-
-    // Cập nhật power-ups
-    updatePowerups() {
-        for (let i = this.powerups.length - 1; i >= 0; i--) {
-            const powerup = this.powerups[i];
-
-            // Kiểm tra va chạm với bóng
-            const dx = powerup.x - this.ball.x;
-            const dy = powerup.y - this.ball.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-
-            if (distance < powerup.radius + this.ball.size) {
-                // Áp dụng hiệu ứng
-                const player = this.ball.speedX > 0 ? 'left' : 'right';
-                powerup.type.effect(player);
-
-                // Xóa power-up
-                this.powerups.splice(i, 1);
-            }
-        }
-    }
-
-    // Vẽ power-ups
-    drawPowerups() {
-        for (const powerup of this.powerups) {
-            this.ctx.fillStyle = powerup.type.color;
-            this.ctx.beginPath();
-            this.ctx.arc(powerup.x, powerup.y, powerup.radius, 0, Math.PI * 2);
-            this.ctx.fill();
-        }
-    }
-
+    // Hiển thị thông báo powerup
     showPowerupMessage(powerupName, player) {
         const playerName = player === 'left' ? 'Trái' : 'Phải';
         const message = `${playerName}: ${powerupName}`;
@@ -834,26 +800,46 @@ class PongGame {
         };
     }
 
+    // Cập nhật trạng thái game từ server
+    updateGameFromServer(gameState) {
+        if (!gameState) return;
+
+        // Cập nhật vị trí bóng
+        if (gameState.ball) {
+            this.ball.x = gameState.ball.x;
+            this.ball.y = gameState.ball.y;
+            this.ball.speedX = gameState.ball.speedX;
+            this.ball.speedY = gameState.ball.speedY;
+        }
+
+        // Cập nhật vị trí paddle
+        if (gameState.leftPaddle) {
+            this.leftPaddle.y = gameState.leftPaddle.y;
+            this.leftPaddle.score = gameState.leftPaddle.score;
+        }
+
+        if (gameState.rightPaddle) {
+            this.rightPaddle.y = gameState.rightPaddle.y;
+            this.rightPaddle.score = gameState.rightPaddle.score;
+        }
+
+        // Cập nhật trạng thái game
+        if (gameState.status) {
+            this.gameState.running = gameState.status === 'playing';
+            this.gameState.paused = gameState.status === 'paused';
+            this.gameState.finished = gameState.status === 'finished';
+        }
+
+        // Kiểm tra kết thúc game
+        this.checkGameOver();
+    }
 
     // Lấy paddle của đối phương
     getOpponentPaddle() {
-        const side = document.getElementById('user-side').value;
-        return side === 'left' ? this.rightPaddle : this.leftPaddle;
-    }
+        const userSideElement = document.getElementById('user-side');
+        if (!userSideElement) return this.rightPaddle;
 
-    // Hàm trợ giúp để lấy cookie CSRF token
-    getCookie(name) {
-        let cookieValue = null;
-        if (document.cookie && document.cookie !== '') {
-            const cookies = document.cookie.split(';');
-            for (let i = 0; i < cookies.length; i++) {
-                const cookie = cookies[i].trim();
-                if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                    break;
-                }
-            }
-        }
-        return cookieValue;
+        const side = userSideElement.value;
+        return side === 'left' ? this.rightPaddle : this.leftPaddle;
     }
 }

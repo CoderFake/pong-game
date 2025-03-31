@@ -131,6 +131,16 @@ class PowerupManager {
 
                 // Xóa power-up khỏi sân
                 this.powerupsOnField.splice(i, 1);
+
+                // Gửi thông báo lên server nếu có Websocket
+                if (this.game.ws) {
+                    this.game.ws.send(JSON.stringify({
+                        type: 'powerup_pickup',
+                        powerup_type: powerup.type.id,
+                        player_side: player,
+                        duration: powerup.type.duration
+                    }));
+                }
             }
         }
     }
@@ -163,7 +173,9 @@ class PowerupManager {
         powerup.type.effect(player);
 
         // Hiển thị thông báo
-        this.game.showPowerupMessage(powerup.type.name, player);
+        if (this.game.showPowerupMessage) {
+            this.game.showPowerupMessage(powerup.type.name, player);
+        }
     }
 
     // Vẽ power-up

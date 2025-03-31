@@ -10,43 +10,11 @@ let gameSocket = null;
 function initGameInterface() {
     setupEventListeners();
     loadGameModes();
-}
 
-// Thiết lập các sự kiện
-function setupEventListeners() {
-    // Nút tạo game mới
-    $('#create-game-btn').on('click', function() {
-        $('#create-game-modal').modal('show');
-    });
-
-    // Form tạo game
-    $('#create-game-form').on('submit', function(e) {
-        e.preventDefault();
-        createNewGame();
-    });
-
-    // Nút tham gia game
-    $('#join-game-btn').on('click', function() {
-        loadAvailableGames();
-        $('#join-game-modal').modal('show');
-    });
-
-    // Nút chơi với AI
-    $('#play-ai-btn').on('click', function() {
-        $('#ai-game-modal').modal('show');
-    });
-
-    // Form chơi với AI
-    $('#ai-game-form').on('submit', function(e) {
-        e.preventDefault();
-        startAIGame();
-    });
-
-    // Nút làm mới danh sách game
-    $('#refresh-games-btn').on('click', function() {
-        loadAvailableGames();
-    });
-}
+    // Kết nối hủy chờ đợi
+    $('#cancel-waiting-btn').on('click', function() {
+        if (gameSocket) {
+            gameSocket.close();
 
 // Tải danh sách chế độ chơi
 function loadGameModes() {
@@ -99,7 +67,7 @@ function showWaitingScreen(game) {
     $('#game-powerups').text(game.enable_powerups ? 'Có' : 'Không');
 
     // Tạo game URL để chia sẻ
-    const gameUrl = `${window.location.origin}/game/${game.id}/`;
+    const gameUrl = `${window.location.origin}/#game/${game.id}`;
     $('#game-url').val(gameUrl);
 
     // Nút sao chép URL
@@ -247,6 +215,8 @@ function startAIGame() {
     const maxScore = parseInt($('#ai-max-score').val());
     const enablePowerups = $('#ai-enable-powerups').prop('checked');
 
+    console.log("Starting AI game with options:", { difficulty, maxScore, enablePowerups });
+
     // Ẩn các phần giao diện khác
     $('#game-modes').addClass('hidden');
     $('#waiting-screen').addClass('hidden');
@@ -256,20 +226,16 @@ function startAIGame() {
     $('#game-container').removeClass('hidden');
 
     // Tạo hidden input để lưu phía người chơi (luôn là bên trái trong chế độ AI)
-    const sideInput = $('<input type="hidden" id="user-side" value="left">');
-    $('#game-container').append(sideInput);
+    if (!$('#user-side').length) {
+        const sideInput = $('<input type="hidden" id="user-side" value="left">');
+        $('#game-container').append(sideInput);
+    } else {
+        $('#user-side').val('left');
+    }
 
     // Tạo canvas cho game
     const canvas = $('<canvas id="game-canvas"></canvas>');
     $('#game-canvas-container').empty().append(canvas);
-
-    // Khởi tạo game
-    pongGame = new PongGame('game-canvas', {
-        maxScore: maxScore,
-        enablePowerups: enablePowerups,
-        aiEnabled: true,
-        aiDifficulty: difficulty
-    });
 
     // Hiển thị thông tin game
     $('#game-info').html(`
@@ -283,21 +249,35 @@ function startAIGame() {
         </div>
     `);
 
-    // Sự kiện cho nút bắt đầu
-    $('#start-game-btn').on('click', function() {
-        pongGame.startGame();
-        $(this).prop('disabled', true);
-    });
+    // Khởi tạo game
+    try {
+        pongGame = new PongGame('game-canvas', {
+            maxScore: maxScore,
+            enablePowerups: enablePowerups,
+            aiEnabled: true,
+            aiDifficulty: difficulty
+        });
 
-    // Sự kiện cho nút trở về menu
-    $('#back-to-menu-btn').on('click', function() {
-        if (pongGame) {
-            pongGame = null;
-        }
+        // Sự kiện cho nút bắt đầu
+        $('#start-game-btn').on('click', function() {
+            pongGame.startGame();
+            $(this).prop('disabled', true);
+        });
 
+        // Sự kiện cho nút trở về menu
+        $('#back-to-menu-btn').on('click', function() {
+            if (pongGame) {
+                pongGame = null;
+            }
+            $('#game-container').addClass('hidden');
+            $('#games-content').removeClass('hidden');
+        });
+    } catch (error) {
+        console.error("Error initializing Pong game:", error);
+        alert("Không thể khởi tạo trò chơi. Vui lòng thử lại.");
         $('#game-container').addClass('hidden');
-        $('#game-modes').removeClass('hidden');
-    });
+        $('#games-content').removeClass('hidden');
+    }
 }
 
 // Bắt đầu game multiplayer
@@ -309,7 +289,7 @@ function startMultiplayerGame(gameId) {
             // Xác định phía của người chơi
             let userSide = 'left';
             for (const player of response.players) {
-                if (player.user.id === userId) {
+                if (player.user && player.user.id === userId) {
                     userSide = player.side;
                     break;
                 }
@@ -323,8 +303,12 @@ function startMultiplayerGame(gameId) {
             $('#game-container').removeClass('hidden');
 
             // Tạo hidden input để lưu phía người chơi
-            const sideInput = $('<input type="hidden" id="user-side">').val(userSide);
-            $('#game-container').append(sideInput);
+            if (!$('#user-side').length) {
+                const sideInput = $('<input type="hidden" id="user-side">').val(userSide);
+                $('#game-container').append(sideInput);
+            } else {
+                $('#user-side').val(userSide);
+            }
 
             // Tạo canvas cho game
             const canvas = $('<canvas id="game-canvas"></canvas>');
@@ -335,52 +319,89 @@ function startMultiplayerGame(gameId) {
             const wsUrl = `${wsProtocol}//${window.location.host}/ws/game/${gameId}/`;
 
             // Khởi tạo game
-            pongGame = new PongGame('game-canvas', {
-                maxScore: response.max_score,
-                enablePowerups: response.enable_powerups,
-                ballSpeed: response.ball_speed,
-                paddleSize: response.paddle_size === 'small' ? 75 : (response.paddle_size === 'large' ? 125 : 100),
-                gameId: gameId,
-                wsUrl: wsUrl
-            });
+            try {
+                pongGame = new PongGame('game-canvas', {
+                    maxScore: response.max_score,
+                    enablePowerups: response.enable_powerups,
+                    ballSpeed: response.ball_speed,
+                    paddleSize: response.paddle_size === 'small' ? 75 : (response.paddle_size === 'large' ? 125 : 100),
+                    gameId: gameId,
+                    wsUrl: wsUrl
+                });
 
-            // Hiển thị thông tin game
-            $('#game-info').html(`
-                <div class="mb-3">
-                    <h4>Game #${gameId}</h4>
-                    <p>
-                        Phía của bạn: ${userSide === 'left' ? 'Trái (W/S)' : 'Phải (↑/↓)'} | 
-                        Điểm tối đa: ${response.max_score} | 
-                        Power-ups: ${response.enable_powerups ? 'Có' : 'Không'}
-                    </p>
-                </div>
-                <div class="mb-3">
-                    <button id="ready-game-btn" class="btn btn-primary">Sẵn sàng</button>
-                </div>
-            `);
+                // Hiển thị thông tin game
+                $('#game-info').html(`
+                    <div class="mb-3">
+                        <h4>Game #${gameId}</h4>
+                        <p>
+                            Phía của bạn: ${userSide === 'left' ? 'Trái (W/S)' : 'Phải (↑/↓)'} | 
+                            Điểm tối đa: ${response.max_score} | 
+                            Power-ups: ${response.enable_powerups ? 'Có' : 'Không'}
+                        </p>
+                    </div>
+                    <div class="mb-3">
+                        <button id="ready-game-btn" class="btn btn-primary">Sẵn sàng</button>
+                        <button id="back-to-menu-btn" class="btn btn-secondary ms-2">Trở về Menu</button>
+                    </div>
+                `);
 
-            // Sự kiện cho nút sẵn sàng
-            $('#ready-game-btn').on('click', function() {
-                if (pongGame && pongGame.ws) {
-                    pongGame.ws.send(JSON.stringify({
-                        type: 'game_ready'
-                    }));
+                // Lưu ID người chơi
+                if (response.players.length >= 2) {
+                    const leftPlayer = response.players.find(p => p.side === 'left');
+                    const rightPlayer = response.players.find(p => p.side === 'right');
 
-                    $(this).prop('disabled', true).text('Đã sẵn sàng');
+                    if (leftPlayer && leftPlayer.user) {
+                        $('#game-info').data('leftUserId', leftPlayer.user.id);
+                    }
 
-                    // Cập nhật trạng thái sẵn sàng lên server
-                    $.ajax({
-                        url: `/api/game/games/${gameId}/ready/`,
-                        method: 'POST',
-                        headers: {
-                            'X-CSRFToken': getCookie('csrftoken')
-                        },
-                        error: function(error) {
-                            console.error('Lỗi khi gửi trạng thái sẵn sàng:', error);
-                        }
-                    });
+                    if (rightPlayer && rightPlayer.user) {
+                        $('#game-info').data('rightUserId', rightPlayer.user.id);
+                    }
                 }
-            });
+
+                // Sự kiện cho nút sẵn sàng
+                $('#ready-game-btn').on('click', function() {
+                    if (pongGame && pongGame.ws) {
+                        pongGame.ws.send(JSON.stringify({
+                            type: 'game_ready'
+                        }));
+
+                        $(this).prop('disabled', true).text('Đã sẵn sàng');
+
+                        // Cập nhật trạng thái sẵn sàng lên server
+                        $.ajax({
+                            url: `/api/game/games/${gameId}/ready/`,
+                            method: 'POST',
+                            headers: {
+                                'X-CSRFToken': getCookie('csrftoken')
+                            },
+                            error: function(error) {
+                                console.error('Lỗi khi gửi trạng thái sẵn sàng:', error);
+                            }
+                        });
+                    }
+                });
+
+                // Sự kiện cho nút trở về menu
+                $('#back-to-menu-btn').on('click', function() {
+                    if (pongGame) {
+                        if (pongGame.ws) {
+                            pongGame.ws.close();
+                        }
+                        pongGame = null;
+                    }
+                    $('#game-container').addClass('hidden');
+                    $('#games-content').removeClass('hidden');
+                });
+
+                // Bắt đầu vẽ game
+                requestAnimationFrame(pongGame.animate);
+            } catch (error) {
+                console.error("Error initializing Pong game:", error);
+                alert("Không thể khởi tạo trò chơi. Vui lòng thử lại.");
+                $('#game-container').addClass('hidden');
+                $('#games-content').removeClass('hidden');
+            }
         },
         error: function(error) {
             console.error('Lỗi khi tải thông tin game:', error);
@@ -388,7 +409,7 @@ function startMultiplayerGame(gameId) {
 
             // Trở về menu chính
             $('#waiting-screen').addClass('hidden');
-            $('#game-modes').removeClass('hidden');
+            $('#games-content').removeClass('hidden');
         }
     });
 }
@@ -422,8 +443,55 @@ function getCookie(name) {
     }
     return cookieValue;
 }
+}
+        // Trở về trang games
+        $('#waiting-screen').addClass('hidden');
+        $('#games-content').removeClass('hidden');
+    });
+}
 
-// Khởi tạo giao diện khi trang đã tải xong
-$(document).ready(function() {
-    initGameInterface();
-});
+// Thiết lập các sự kiện
+function setupEventListeners() {
+    // Nút tạo game mới
+    $('#create-game-btn').on('click', function() {
+        $('#create-game-modal').modal('show');
+    });
+
+    // Form tạo game
+    $('#create-game-form').on('submit', function(e) {
+        e.preventDefault();
+        createNewGame();
+    });
+
+    // Nút tham gia game
+    $('#join-game-btn').on('click', function() {
+        loadAvailableGames();
+        $('#join-game-modal').modal('show');
+    });
+
+    // Nút chơi với AI
+    $('#play-ai-btn').on('click', function() {
+        $('#ai-game-modal').modal('show');
+    });
+
+    // Form chơi với AI
+    $('#ai-game-form').on('submit', function(e) {
+        e.preventDefault();
+        startAIGame();
+    });
+
+    // Submit form AI game
+    $('#ai-game-submit').on('click', function() {
+        startAIGame();
+    });
+
+    // Submit form tạo game
+    $('#create-game-submit').on('click', function() {
+        createNewGame();
+    });
+
+    // Nút làm mới danh sách game
+    $('#refresh-games-btn').on('click', function() {
+        loadAvailableGames();
+    });
+}
